@@ -18,6 +18,7 @@ from brandcal import (
     approvals,
     audit,
     backup,
+    migrate_v1,
     posts,
     publish,
     reports,
@@ -126,7 +127,11 @@ COMMANDS: dict[str, tuple[str, list[str], list[str]]] = {
         ["NO_FRESH_BACKUP", "BAD_ARGS"],
     ),
     "init": ("", ["admin"], ["NO_AGENT", "ROLE_NOT_ALLOWED", "HOME_NOT_CONFIGURED"]),
-    "migrate": ("FILE [--dry-run]", ["admin"], ["BAD_ARGS", "ROLE_NOT_ALLOWED"]),
+    "migrate": (
+        "FILE [--dry-run] [--out FILE] [--owner NAME]",
+        ["admin"],
+        ["BAD_ARGS", "ROLE_NOT_ALLOWED"],
+    ),
 }
 
 
@@ -249,6 +254,11 @@ def build_parser() -> argparse.ArgumentParser:
     backup_p = sub.add_parser("backup", parents=[common], add_help=False)
     backup_sub = backup_p.add_subparsers(dest="backup_cmd", parser_class=_Parser)
     backup_sub.add_parser("restore-test", parents=[common], add_help=False)
+    migrate_p = sub.add_parser("migrate", parents=[common], add_help=False)
+    migrate_p.add_argument("file")
+    migrate_p.add_argument("--dry-run", action="store_true")
+    migrate_p.add_argument("--out")
+    migrate_p.add_argument("--owner")
     return parser
 
 
@@ -600,7 +610,29 @@ def cmd_backup(args: argparse.Namespace) -> dict[str, object]:
         return out
 
 
+def cmd_migrate(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args) as s:
+        if s.role != "admin":
+            raise BrandcalError(ErrorCode.ROLE_NOT_ALLOWED, "Only an admin may run migrate.")
+        try:
+            data = json.loads(Path(args.file).read_text(encoding="utf-8"))
+        except (ValueError, OSError) as err:
+            raise BrandcalError(ErrorCode.BAD_ARGS, f"Cannot read {args.file}: {err}.") from None
+        out: dict[str, object] = migrate_v1.migrate(
+            s.conn,
+            s.cfg,
+            s.base,
+            data,
+            s.who,
+            dry_run=args.dry_run,
+            out=Path(args.out) if args.out else None,
+            owner=args.owner,
+        )
+        return out
+
+
 COMMAND_FUNCS = {
+    "migrate": cmd_migrate,
     "export": cmd_export,
     "backup": cmd_backup,
     "next": cmd_next,

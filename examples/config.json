@@ -1,0 +1,14 @@
+{
+  "timezone": "Europe/London",
+  "agents": [
+    {"id": "writer-1", "role": "writer"},
+    {"id": "manager-1", "role": "manager"},
+    {"id": "approver-1", "role": "approver"},
+    {"id": "admin-1", "role": "admin"},
+    {"id": "system", "role": "system"}
+  ],
+  "platforms_file": "platforms.json",
+  "claim_minutes": 30,
+  "missed_flag_days": 14,
+  "backup_keep": {"db": 14, "json": 30}
+}

@@ -3,8 +3,8 @@
 A generic, open-source command-line tool and SQLite library for AI agents that manage a
 **human-approved** social media content calendar.
 
-> **Status:** early development (v0.x). Not yet usable. Interfaces, schema and error codes
-> will change until v1.0.
+> **Status:** early development (v0.x). The core commands work and are tested, but
+> interfaces, schema and error codes may still change until v1.0.
 
 ## What it is
 
@@ -76,23 +76,57 @@ are **fields on an approved post**, not separate states.
   (`NO_FRESH_BACKUP` blocks the archive if there is no checked backup).
 - **Machine-friendly.** One-line JSON output and stable error codes with documented exit codes.
 
-## Planned commands
+## Commands
 
 | Command | Purpose |
 |---|---|
-| `brandcal help [CMD]` | List commands, or describe one |
+| `brandcal help [CMD]` | List commands, or describe one (arguments, roles, errors) |
 | `brandcal schema` | States, transitions, roles and time format as JSON |
-| `brandcal add` / `edit` / `submit` | Write and revise posts |
+| `brandcal init` | Create `brand.db` from the schema and seed agents and platforms from config |
+| `brandcal add` / `edit` / `part` / `media add` / `submit` | Write and revise posts |
+| `brandcal note` / `keywords` / `check` | Notes, keywords and validation (not content) |
+| `brandcal preview` | Card data for the manager to show the approver |
 | `brandcal approve` / `request-changes` / `reschedule` | Record the human approver's decision |
-| `brandcal list` / `show` / `today` / `next` | Read the calendar |
+| `brandcal cancel` | Cancel an open post with a kind and a reason |
 | `brandcal schedule` / `unschedule` | Record a native platform schedule |
 | `brandcal begin` / `published` / `failed` | Claim, publish and close out a post |
-| `brandcal cancel` | Cancel an open post with a reason |
+| `brandcal list` / `show` / `today` / `tomorrow` / `next` | Read the calendar |
+| `brandcal report weekly` / `render week` | Weekly JSON report and weekly HTML page |
 | `brandcal sweep` | Mark missed posts, release expired claims |
-| `brandcal audit` | Verify the event hash chain |
-| `brandcal backup` / `export` / `archive run` | Verified backups, exports and monthly archive |
+| `brandcal audit` | Verify hash chains, approvals of published posts and media checksums |
+| `brandcal export` / `backup` / `backup restore-test` | JSON export, checked database copies and a restore test |
+| `brandcal migrate FILE [--dry-run]` | Import a v1 JSON calendar |
 
-Only `--version` and `help` exist today.
+Every command prints one line of JSON. Every write needs `--as NAME` (or `BRANDCAL_AGENT`).
+Error codes and exit codes are listed in [docs/ERRORS.md](docs/ERRORS.md); the full
+specification is [docs/SPEC.md](docs/SPEC.md).
+
+## Quick start
+
+This runs against the fake data in [examples/](examples/), in a throwaway data directory.
+A test (`tests/test_readme.py`) runs these exact commands, so they stay correct.
+
+<!-- quickstart -->
+```sh
+export BRANDCAL_HOME="$(mktemp -d)"
+cp examples/config.json examples/platforms.json "$BRANDCAL_HOME/"
+brandcal init --as admin-1
+brandcal add --as writer-1 < examples/posts/example-launch.json
+brandcal list
+brandcal show p0001
+brandcal check p0001
+brandcal next --as approver-1
+brandcal preview p0001 --as manager-1
+brandcal audit
+brandcal backup --as admin-1
+brandcal migrate examples/v1_calendar.example.json --dry-run --as admin-1
+```
+<!-- /quickstart -->
+
+`preview` returns the version and hash the approver sees. Once the human approver has
+agreed, the manager records it with the same version and hash, for example
+`brandcal approve p0001 --version 1 --hash <hash> --channel card --msg msg-001 --words "Approved" --as manager-1`.
+The post can then be scheduled or published inside its approved window.
 
 ## Install and development
 
@@ -110,6 +144,10 @@ brandcal --version
 brandcal help
 ```
 
+Set `BRANDCAL_HOME` to your data directory and give it a `config.json` (see
+[examples/config.json](examples/config.json) and SPEC 13). There is no default timezone:
+set `"timezone"` in the config or `BRANDCAL_TZ`.
+
 Checks (run all of them before committing):
 
 ```sh
@@ -121,7 +159,7 @@ python scripts/privacy_scan.py
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and, for AI agents, [AGENTS.md](AGENTS.md).
-The generic specification will live in [docs/SPEC.md](docs/SPEC.md). Example data is in
+The generic specification is [docs/SPEC.md](docs/SPEC.md). Example data is in
 [examples/](examples/).
 
 ## Licence
