@@ -259,19 +259,25 @@ CREATE TABLE transitions (from_status TEXT NOT NULL, to_status TEXT NOT NULL, ro
                           PRIMARY KEY (from_status, to_status));
 ```
 
-**Triggers** (each one a separate, named trigger with its own test):
+**Triggers** (each one a separate, named trigger with its own test). Append-only and delete guards (T-g, T-h) abort with `APPEND_ONLY`. The `system` agent always exists, since triggers write events as `system`:
 
 | # | Name (suggested) | Rule |
 |---|---|---|
 | T-a | `posts_insert_status` | INSERT into posts must have status `pending_approval`, unless `legacy_id` is set (migration only). |
 | T-b | `posts_status_transition` | UPDATE of `posts.status` to a different value must match a row in `transitions`, else ABORT `BAD_TRANSITION`. |
-| T-c | `posts_approved_needs_approval` | Status → `approved` needs an approvals row (`approve`, or `reschedule` from `missed`) for the current `content_version` and `content_hash`. |
+| T-c | `posts_approved_needs_approval` | Status → `approved` needs an approvals row (`approve`, or `reschedule` from `missed`) for the current `content_version` and `content_hash`. Else `STALE_APPROVAL`. |
 | T-d | `posts_published_needs_approval` | Status → `published` needs a valid approval for the current version (legacy rows excepted). |
 | T-e | `*_edit_while_queued` | BEFORE UPDATE/INSERT/DELETE on parts and media, and BEFORE UPDATE of `first_comment`, `target_url`, `post_type` or `window` on posts: ABORT `EDIT_WHILE_SCHEDULED` if the post has `native_scheduled_at`, `EDIT_WHILE_CLAIMED` if it has `claimed_by`. Runs before T-f. |
 | T-f | `*_content_bump` | AFTER a content change (parts, media, `first_comment`, `target_url`, `post_type`): bump `content_version`; if status was `approved` or `missed`, set it to `pending_approval` and write an event. A `window` change alone does not bump the version (SPEC 5.4). |
 | T-g | `events_no_update`, `approvals_no_update` | UPDATE on events or approvals always ABORTs. |
 | T-h | `events_no_delete`, `approvals_no_delete` | DELETE on events or approvals ABORTs unless `archive_lock.active = 1`. |
 | T-i | `approvals_roles` | INSERT into approvals checks the roles of `decided_by`, `relayed_by`, `recorded_by` against `agents`. |
+
+**Connection functions.** `db.open()` registers two SQL functions that triggers use:
+`bc_now()` (current time in the display timezone, SPEC 5.2 format) and
+`bc_row_hash(prev, at, actor, post_id, action, from_status, to_status, detail, reason, chain)`
+(same as `events.row_hash`). A connection without them (e.g. the plain `sqlite3` shell) cannot
+fire the content-edit triggers, which is intended: edits go through the tool.
 
 The CLI computes `content_hash` itself and sets schedule and claim fields to NULL in the same
 UPDATE as any status change. `archive_lock.active` is set to 1 and back to 0 inside the same
@@ -530,6 +536,7 @@ sequenceDiagram
 | `export` / `backup` / `backup restore-test` | SPEC 10.6 | admin, system |
 | `archive run [--month YYYY-MM] [--dry-run]` | SPEC 10 | admin, system |
 | `archive list/show/search/stats --month YYYY-MM …` | Read archive files (read-only) | all |
+| `init` | Create `brand.db` from the schema; seed transitions, agents and platforms from config (re-running only adds missing agents and platforms) | admin |
 | `migrate FILE [--dry-run]` | Import a v1 JSON calendar (SPEC 12) | admin |
 
 Identity: every write needs `--as NAME` or `BRANDCAL_AGENT`, naming an agent in the agents
@@ -555,7 +562,7 @@ Error (to stdout, same shape always):
 | 2 | usage or configuration error | `BAD_ARGS`, `TZ_NOT_CONFIGURED`, `HOME_NOT_CONFIGURED`, `NO_AGENT`, `EXTRA_NOT_INSTALLED` |
 | 3 | validation failed | `MEDIA_INVALID`, `TOO_LONG`, `ON_HOLD`, `TIME_OFFSET_REQUIRED`, `BAD_WINDOW`, `BAD_TIME` |
 | 4 | not allowed for this agent, or without delegation | `ROLE_NOT_ALLOWED`, `COMMENT_NOT_DELEGATED` |
-| 5 | illegal transition or not allowed in this state | `BAD_TRANSITION`, `EDIT_WHILE_SCHEDULED`, `EDIT_WHILE_CLAIMED`, `NATIVELY_SCHEDULED`, `NO_FRESH_BACKUP` |
+| 5 | illegal transition or not allowed in this state | `BAD_TRANSITION`, `APPEND_ONLY`, `EDIT_WHILE_SCHEDULED`, `EDIT_WHILE_CLAIMED`, `NATIVELY_SCHEDULED`, `NO_FRESH_BACKUP` |
 | 6 | stale approval, hash mismatch, bad signature, unapproved time | `STALE_APPROVAL`, `HASH_MISMATCH`, `BAD_SIGNATURE`, `WINDOW_NOT_APPROVED` |
 | 7 | not found in the live calendar | `NOT_FOUND`, `ARCHIVED` |
 | 8 | conflict | `CLAIMED`, `URL_CONFLICT`, `CHECK_LIVE_FIRST` |
