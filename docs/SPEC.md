@@ -295,17 +295,19 @@ The canonical form, joined with `\n` and hashed with SHA-256 (hex):
 v1
 platform=<platform>
 post_type=<post_type>
-target_url=<target_url or empty>
-first_comment=<first_comment or empty>
+target_url=<JSON string, "" if none>
+first_comment=<JSON string, "" if none>
 part=<pos>
-text=<part text, exact>
-media=<pos>:<sha256>:<alt text>     (one line per media item, by pos)
+text=<part text as a JSON string>
+media=<pos>:<sha256>:<alt text as a JSON string>   (one line per media item, by pos)
 part=<pos>
 ...
 ```
 
 - Text is used exactly as stored (no trimming, no Unicode normalisation beyond what `add`
-  stored). Parts in `pos` order; media in `pos` order within each part.
+  stored). Every free-text value (target URL, first comment, part text, alt text) is
+  written as a JSON string (`json.dumps`, `ensure_ascii=False`), e.g. `text="Hello\nworld"`, so a
+  newline inside text can never imitate the line structure. Parts in `pos` order; media in `pos` order within each part.
 - **Covered:** text, media files (by checksum), alt text, first comment, post type, target
   URL, platform. **Not covered:** window, title, slug, notes, keywords, campaign, pillar,
   holds.
@@ -560,7 +562,7 @@ Error (to stdout, same shape always):
 |---|---|---|
 | 0 | ok (including "already done") | |
 | 2 | usage or configuration error | `BAD_ARGS`, `TZ_NOT_CONFIGURED`, `HOME_NOT_CONFIGURED`, `NO_AGENT`, `EXTRA_NOT_INSTALLED` |
-| 3 | validation failed | `MEDIA_INVALID`, `TOO_LONG`, `ON_HOLD`, `TIME_OFFSET_REQUIRED`, `BAD_WINDOW`, `BAD_TIME` |
+| 3 | validation failed | `INVALID_POST`, `MEDIA_INVALID`, `TOO_LONG`, `ON_HOLD`, `TIME_OFFSET_REQUIRED`, `BAD_WINDOW`, `BAD_TIME` |
 | 4 | not allowed for this agent, or without delegation | `ROLE_NOT_ALLOWED`, `COMMENT_NOT_DELEGATED` |
 | 5 | illegal transition or not allowed in this state | `BAD_TRANSITION`, `APPEND_ONLY`, `POST_CLOSED`, `EDIT_WHILE_SCHEDULED`, `EDIT_WHILE_CLAIMED`, `NATIVELY_SCHEDULED`, `NO_FRESH_BACKUP` |
 | 6 | stale approval, hash mismatch, bad signature, unapproved time | `STALE_APPROVAL`, `HASH_MISMATCH`, `BAD_SIGNATURE`, `WINDOW_NOT_APPROVED` |

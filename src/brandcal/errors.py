@@ -95,6 +95,9 @@ class ErrorCode(StrEnum):
     POST_CLOSED = "POST_CLOSED"
     """The post is published or cancelled and can no longer be changed."""
 
+    INVALID_POST = "INVALID_POST"
+    """The post's structure breaks a rule (part count, target URL, article title or body)."""
+
 
 EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.TIME_OFFSET_REQUIRED: ExitCode.VALIDATION,
@@ -120,6 +123,7 @@ EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.ON_HOLD: ExitCode.VALIDATION,
     ErrorCode.NOT_FOUND: ExitCode.NOT_FOUND,
     ErrorCode.POST_CLOSED: ExitCode.BAD_STATE,
+    ErrorCode.INVALID_POST: ExitCode.VALIDATION,
 }
 """Exit code for each error code. TODO: add the remaining codes as commands land."""
 
