@@ -1,0 +1,16 @@
+stateDiagram-v2
+  [*] --> pending_approval : add
+  pending_approval --> approved : approver approves (recorded by manager)
+  pending_approval --> changes_requested : approver requests changes
+  changes_requested --> pending_approval : writer edits and submits
+  approved --> pending_approval : content edited (automatic)
+  approved --> published : begin and post, or native schedule went live, then URL recorded
+  approved --> missed : window ended (sweep)
+  missed --> approved : approver OKs a new time
+  missed --> pending_approval : content edited (automatic)
+  pending_approval --> cancelled
+  changes_requested --> cancelled
+  approved --> cancelled
+  missed --> cancelled
+  published --> [*]
+  cancelled --> [*]
