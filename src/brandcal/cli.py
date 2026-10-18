@@ -16,6 +16,7 @@ from typing import Any, NoReturn
 from brandcal import (
     __version__,
     approvals,
+    archive,
     audit,
     backup,
     migrate_v1,
@@ -54,7 +55,7 @@ COMMANDS: dict[str, tuple[str, list[str], list[str]]] = {
     "today": ("", _ALL, []),
     "tomorrow": ("", _ALL, []),
     "list": (
-        "[--status S] [--from D] [--to D] [--platform P] [--closed]",
+        "[--status S] [--from D] [--to D] [--platform P] [--closed] [--with-archive]",
         _ALL,
         ["BAD_TIME"],
     ),
@@ -124,7 +125,7 @@ COMMANDS: dict[str, tuple[str, list[str], list[str]]] = {
     "archive": (
         "run [--month YYYY-MM] [--dry-run] | list|show|search|stats --month YYYY-MM",
         ["admin", "system", "all (read)"],
-        ["NO_FRESH_BACKUP", "BAD_ARGS"],
+        ["NO_FRESH_BACKUP", "CLAIMED", "BAD_ARGS", "ROLE_NOT_ALLOWED", "NOT_FOUND"],
     ),
     "init": ("", ["admin"], ["NO_AGENT", "ROLE_NOT_ALLOWED", "HOME_NOT_CONFIGURED"]),
     "migrate": (
@@ -241,6 +242,7 @@ def build_parser() -> argparse.ArgumentParser:
     list_p.add_argument("--to", dest="date_to")
     list_p.add_argument("--platform")
     list_p.add_argument("--closed", action="store_true")
+    list_p.add_argument("--with-archive", action="store_true")
     show_p = sub.add_parser("show", parents=[common], add_help=False)
     show_p.add_argument("id")
     show_p.add_argument("--log", action="store_true")
@@ -254,6 +256,19 @@ def build_parser() -> argparse.ArgumentParser:
     backup_p = sub.add_parser("backup", parents=[common], add_help=False)
     backup_sub = backup_p.add_subparsers(dest="backup_cmd", parser_class=_Parser)
     backup_sub.add_parser("restore-test", parents=[common], add_help=False)
+    archive_p = sub.add_parser("archive", parents=[common], add_help=False)
+    archive_sub = archive_p.add_subparsers(dest="archive_cmd", parser_class=_Parser, required=True)
+    run_p = archive_sub.add_parser("run", parents=[common], add_help=False)
+    run_p.add_argument("--month")
+    run_p.add_argument("--dry-run", action="store_true")
+    for name in ("list", "show", "search", "stats"):
+        read_p = archive_sub.add_parser(name, parents=[common], add_help=False)
+        if name == "show":
+            read_p.add_argument("id")
+            read_p.add_argument("--log", action="store_true")
+        if name == "search":
+            read_p.add_argument("text")
+        read_p.add_argument("--month", required=True)
     migrate_p = sub.add_parser("migrate", parents=[common], add_help=False)
     migrate_p.add_argument("file")
     migrate_p.add_argument("--dry-run", action="store_true")
@@ -550,8 +565,9 @@ def cmd_today(args: argparse.Namespace) -> dict[str, object]:
 def cmd_list(args: argparse.Namespace) -> dict[str, object]:
     with _session(args, write=False) as s:
         rows = reports.list_posts(
-            s.conn, s.cfg, args.status, args.date_from, args.date_to, args.platform, args.closed
-        )
+            s.conn, s.cfg, args.status, args.date_from, args.date_to, args.platform, args.closed,
+            args.with_archive, s.base,
+        )  # fmt: skip
         return {"ok": True, "posts": rows}
 
 
@@ -610,6 +626,23 @@ def cmd_backup(args: argparse.Namespace) -> dict[str, object]:
         return out
 
 
+def cmd_archive(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args, write=args.archive_cmd == "run") as s:
+        out: dict[str, object]
+        if args.archive_cmd == "run":
+            _admin_or_system(s.role)
+            out = archive.run(s.conn, s.cfg, s.base, s.who, args.month, args.dry_run)
+        elif args.archive_cmd == "list":
+            out = archive.list_month(s.base, s.cfg, args.month)
+        elif args.archive_cmd == "show":
+            out = archive.show(s.base, args.month, args.id, args.log)
+        elif args.archive_cmd == "search":
+            out = archive.search(s.base, args.month, args.text)
+        else:
+            out = archive.stats(s.conn, args.month)
+        return out
+
+
 def cmd_migrate(args: argparse.Namespace) -> dict[str, object]:
     with _session(args) as s:
         if s.role != "admin":
@@ -632,6 +665,7 @@ def cmd_migrate(args: argparse.Namespace) -> dict[str, object]:
 
 
 COMMAND_FUNCS = {
+    "archive": cmd_archive,
     "migrate": cmd_migrate,
     "export": cmd_export,
     "backup": cmd_backup,
