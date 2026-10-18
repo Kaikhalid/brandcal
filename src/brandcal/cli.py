@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
 
-from brandcal import __version__, approvals, posts
+from brandcal import __version__, approvals, posts, publish, sweep
 from brandcal import config as cfgmod
 from brandcal.db import init_db, open_db
 from brandcal.errors import EXIT_CODES, BrandcalError, ErrorCode
@@ -202,6 +202,21 @@ def build_parser() -> argparse.ArgumentParser:
     cancel_p.add_argument("--msg")
     cancel_p.add_argument("--words")
     cancel_p.add_argument("--approver")
+    sched_p = sub.add_parser("schedule", parents=[common], add_help=False)
+    sched_p.add_argument("id")
+    sched_p.add_argument("--at", required=True)
+    sub.add_parser("unschedule", parents=[common], add_help=False).add_argument("id")
+    begin_p = sub.add_parser("begin", parents=[common], add_help=False)
+    begin_p.add_argument("id")
+    begin_p.add_argument("--not-live", action="store_true")
+    pub_p = sub.add_parser("published", parents=[common], add_help=False)
+    pub_p.add_argument("id")
+    pub_p.add_argument("url")
+    pub_p.add_argument("--part", nargs=2, action="append", metavar=("N", "URL"), default=[])
+    failed_p = sub.add_parser("failed", parents=[common], add_help=False)
+    failed_p.add_argument("id")
+    failed_p.add_argument("--reason", required=True)
+    sub.add_parser("sweep", parents=[common], add_help=False)
     return parser
 
 
@@ -421,6 +436,55 @@ def cmd_cancel(args: argparse.Namespace) -> dict[str, object]:
         return out
 
 
+def cmd_schedule(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args) as s:
+        out: dict[str, object] = publish.schedule(
+            s.conn, s.who, s.role, s.cfg, s.base, args.id, args.at
+        )
+        return out
+
+
+def cmd_unschedule(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args) as s:
+        out: dict[str, object] = publish.unschedule(s.conn, s.who, s.role, s.cfg, args.id)
+        return out
+
+
+def cmd_begin(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args) as s:
+        out: dict[str, object] = publish.begin(
+            s.conn, s.who, s.role, s.cfg, s.base, args.id, args.not_live
+        )
+        return out
+
+
+def cmd_published(args: argparse.Namespace) -> dict[str, object]:
+    part_urls: dict[int, str] = {}
+    for number, url in args.part:
+        if not number.isdigit():
+            raise BrandcalError(ErrorCode.BAD_ARGS, f"--part needs a part number, not {number!r}.")
+        part_urls[int(number)] = url
+    with _session(args) as s:
+        out: dict[str, object] = publish.published(
+            s.conn, s.who, s.role, s.cfg, args.id, args.url, part_urls
+        )
+        return out
+
+
+def cmd_failed(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args) as s:
+        out: dict[str, object] = publish.failed(s.conn, s.who, s.role, s.cfg, args.id, args.reason)
+        return out
+
+
+def cmd_sweep(args: argparse.Namespace) -> dict[str, object]:
+    """Any agent may run it; the agent is optional and, when given, is recorded."""
+    named = bool(args.agent or os.environ.get("BRANDCAL_AGENT"))
+    with _session(args, write=named) as s:
+        out: dict[str, object] = sweep.sweep(s.conn, s.cfg, agent=s.who or None)
+        return out
+
+
 COMMAND_FUNCS = {
     "help": cmd_help,
     "schema": cmd_schema,
@@ -438,6 +502,12 @@ COMMAND_FUNCS = {
     "request-changes": cmd_request_changes,
     "reschedule": cmd_reschedule,
     "cancel": cmd_cancel,
+    "schedule": cmd_schedule,
+    "unschedule": cmd_unschedule,
+    "begin": cmd_begin,
+    "published": cmd_published,
+    "failed": cmd_failed,
+    "sweep": cmd_sweep,
 }
 
 

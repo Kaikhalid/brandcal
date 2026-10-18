@@ -27,10 +27,10 @@ from brandcal.transitions import CLOSED, check_transition
 CANCEL_KINDS = ("idea", "version", "plan")
 _HEX = re.compile(r"[0-9a-f]{8,64}")
 # Cleared in the same UPDATE as any status change (CHECK: only approved posts carry them).
-_CLEAR = "native_scheduled_at = NULL, claimed_by = NULL, claim_expires = NULL"
+CLEAR = "native_scheduled_at = NULL, claimed_by = NULL, claim_expires = NULL"
 
 
-def _manager_only(role: str, what: str) -> None:
+def manager_only(role: str, what: str) -> None:
     if role != "manager":
         raise BrandcalError(
             ErrorCode.ROLE_NOT_ALLOWED, f"Role {role} may not {what}.", "Ask the manager."
@@ -109,7 +109,7 @@ def _record(
     return int(cur.lastrowid or 0)
 
 
-def _log(
+def log_event(
     conn: sqlite3.Connection,
     actor_id: str,
     action: str,
@@ -151,7 +151,7 @@ def approve(
     relayed_by: str | None = None,
     approver: str | None = None,
 ) -> Any:
-    _manager_only(role, "record an approval")
+    manager_only(role, "record an approval")
     if channel == "card":
         if relayed_by not in (None, actor_id):
             raise bad_args("A card approval is relayed by the manager.", "Drop --relayed-by.")
@@ -186,11 +186,11 @@ def approve(
             words=words,
         )
         conn.execute(
-            f"UPDATE posts SET status = 'approved', {_CLEAR}, updated_at = ? WHERE id = ?",
+            f"UPDATE posts SET status = 'approved', {CLEAR}, updated_at = ? WHERE id = ?",
             (at, post_id),
         )
         detail: dict[str, object] = {"approval": approval, "channel": channel, "msg": msg_id}
-        _log(conn, actor_id, "approve", post, at, month, detail)
+        log_event(conn, actor_id, "approve", post, at, month, detail)
         next_step = (
             "send the approver a receipt: exact text, window, fingerprint, 'reply stop to pull it'"
             if channel == "writer-session"
@@ -211,7 +211,7 @@ def request_changes(
     words: str,
     approver: str | None = None,
 ) -> Any:
-    _manager_only(role, "record a request for changes")
+    manager_only(role, "record a request for changes")
     _need("msg", msg_id)
     _need("words", words)
     decided_by = _approver(cfg, approver)
@@ -235,10 +235,10 @@ def request_changes(
             changes=words,
         )
         conn.execute(
-            f"UPDATE posts SET status = 'changes_requested', {_CLEAR}, updated_at = ? WHERE id = ?",
+            f"UPDATE posts SET status = 'changes_requested', {CLEAR}, updated_at = ? WHERE id = ?",
             (at, post_id),
         )
-        _log(conn, actor_id, "request-changes", post, at, month, {"approval": approval})
+        log_event(conn, actor_id, "request-changes", post, at, month, {"approval": approval})
         return post_result(conn, post_id, "writer: edit the post, then brandcal submit", [])
 
 
@@ -256,7 +256,7 @@ def reschedule(
     approver: str | None = None,
 ) -> Any:
     """Time-only decision: the new window becomes the approved one; a missed post is approved."""
-    _manager_only(role, "record a time change")
+    manager_only(role, "record a time change")
     _need("msg", msg_id)
     _need("words", words)
     window = normalise_window(new_window, display_tz(cfg))
@@ -281,13 +281,13 @@ def reschedule(
         )
         # An approved post keeps its status (and any claim or queue entry); a missed one is
         # approved again, which clears them.
-        change = f"status = 'approved', {_CLEAR}," if post["status"] == "missed" else ""
+        change = f"status = 'approved', {CLEAR}," if post["status"] == "missed" else ""
         conn.execute(
             f'UPDATE posts SET "window" = ?, {change} updated_at = ? WHERE id = ?',
             (window, at, post_id),
         )
         detail: dict[str, object] = {"approval": approval, "window": window}
-        _log(conn, actor_id, "reschedule", post, at, month, detail)
+        log_event(conn, actor_id, "reschedule", post, at, month, detail)
         return post_result(
             conn, post_id, f"publish inside the new window: brandcal begin {post_id}", []
         )
@@ -313,7 +313,7 @@ def cancel(
     recording = bool(msg_id or words)
     decided_by = None
     if recording:
-        _manager_only(role, "record the approver's cancel decision")
+        manager_only(role, "record the approver's cancel decision")
         _need("msg", msg_id)
         _need("words", words)
         decided_by = _approver(cfg, approver)
@@ -359,11 +359,11 @@ def cancel(
                 words=str(words),
             )
         conn.execute(
-            f"UPDATE posts SET status = 'cancelled', cancel_kind = ?, closed_at = ?, {_CLEAR},"
+            f"UPDATE posts SET status = 'cancelled', cancel_kind = ?, closed_at = ?, {CLEAR},"
             " updated_at = ? WHERE id = ?",
             (kind, at, at, post_id),
         )
-        _log(conn, actor_id, "cancel", post, at, month, detail, reason)
+        log_event(conn, actor_id, "cancel", post, at, month, detail, reason)
         return post_result(conn, post_id, "", [])
 
 
