@@ -56,7 +56,7 @@ _ADD_KEYS = [
 _TMP = 1000  # parts are renumbered through pos + _TMP so UNIQUE (post_id, pos) never clashes
 
 
-def _bad(message: str, next_step: str = "") -> BrandcalError:
+def bad_args(message: str, next_step: str = "") -> BrandcalError:
     return BrandcalError(ErrorCode.BAD_ARGS, message, next_step)
 
 
@@ -69,14 +69,14 @@ def _require_role(role: str) -> None:
         )
 
 
-def _now(cfg: Mapping[str, Any]) -> tuple[str, str]:
+def now_and_month(cfg: Mapping[str, Any]) -> tuple[str, str]:
     """Current local time text and its month key."""
     tz = display_tz(cfg)
     now = datetime.now(tz)
     return format_time(now), month_key(now, tz)
 
 
-def _load(conn: sqlite3.Connection, post_id: str) -> sqlite3.Row:
+def load_post(conn: sqlite3.Connection, post_id: str) -> sqlite3.Row:
     post: sqlite3.Row | None = conn.execute(
         "SELECT * FROM posts WHERE id = ?", (post_id,)
     ).fetchone()
@@ -86,7 +86,7 @@ def _load(conn: sqlite3.Connection, post_id: str) -> sqlite3.Row:
 
 
 def _load_open(conn: sqlite3.Connection, post_id: str) -> sqlite3.Row:
-    post = _load(conn, post_id)
+    post = load_post(conn, post_id)
     if post["status"] in CLOSED:
         raise BrandcalError(
             ErrorCode.POST_CLOSED, f"{post_id} is {post['status']} and cannot be changed."
@@ -99,7 +99,7 @@ def platform_limits(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
     return {r["id"]: json.loads(r["limits"]) for r in rows}
 
 
-def _raise_first(errors: list[BrandcalError]) -> None:
+def raise_first(errors: list[BrandcalError]) -> None:
     if errors:
         first = errors[0]
         if len(errors) > 1:
@@ -108,8 +108,8 @@ def _raise_first(errors: list[BrandcalError]) -> None:
         raise first
 
 
-def _result(conn: sqlite3.Connection, post_id: str, next_step: str, warnings: list[str]) -> Any:
-    p = _load(conn, post_id)
+def post_result(conn: sqlite3.Connection, post_id: str, next_step: str, warnings: list[str]) -> Any:
+    p = load_post(conn, post_id)
     return {
         "ok": True,
         "id": post_id,
@@ -131,8 +131,8 @@ def _event(
     from_status: str | None,
     detail: dict[str, object] | None = None,
 ) -> None:
-    at, month = _now(cfg)
-    to_status = _load(conn, post_id)["status"]
+    at, month = now_and_month(cfg)
+    to_status = load_post(conn, post_id)["status"]
     events.append_event(
         conn,
         at=at,
@@ -147,7 +147,7 @@ def _event(
 
 
 def _touch(conn: sqlite3.Connection, cfg: Mapping[str, Any], post_id: str) -> None:
-    conn.execute("UPDATE posts SET updated_at = ? WHERE id = ?", (_now(cfg)[0], post_id))
+    conn.execute("UPDATE posts SET updated_at = ? WHERE id = ?", (now_and_month(cfg)[0], post_id))
 
 
 # --- add ---------------------------------------------------------------------------------
@@ -165,15 +165,17 @@ def add_post(
     _require_role(role)
     unknown = sorted(set(data) - set(_ADD_KEYS))
     if unknown:
-        raise _bad(f"Unknown field(s): {', '.join(unknown)}.", f"Allowed: {' '.join(_ADD_KEYS)}")
+        raise bad_args(
+            f"Unknown field(s): {', '.join(unknown)}.", f"Allowed: {' '.join(_ADD_KEYS)}"
+        )
     for key in ("slug", "title", "platform", "post_type", "window", "parts"):
         if not data.get(key):
-            raise _bad(f"Missing field: {key}.")
+            raise bad_args(f"Missing field: {key}.")
     parts = data["parts"]
     if not isinstance(parts, list) or not all(
         isinstance(p, dict) and isinstance(p.get("text"), str) and p["text"] for p in parts
     ):
-        raise _bad('parts must be a list of {"text": "..."} objects.')
+        raise bad_args('parts must be a list of {"text": "..."} objects.')
     ptype = data["post_type"]
     if ptype == "comment":
         if role != "manager":
@@ -185,14 +187,14 @@ def add_post(
                 "Give delegation_msg_id and delegation_words.",
             )
     if ptype in ("comment", "reshare") and not data.get("target_url"):
-        raise _bad(f"A {ptype} needs a target_url.")
+        raise bad_args(f"A {ptype} needs a target_url.")
     tz = display_tz(cfg)
     window = normalise_window(str(data["window"]), tz)
     hold_until = normalise_time(str(data["hold_until"]), tz) if data.get("hold_until") else None
     keywords = data.get("keywords") or []
     if not isinstance(keywords, list):
-        raise _bad("keywords must be a list.")
-    now = _now(cfg)[0]
+        raise bad_args("keywords must be a list.")
+    now = now_and_month(cfg)[0]
     with transaction(conn):
         n = conn.execute(
             "SELECT COALESCE(MAX(CAST(substr(id, 2) AS INTEGER)), 0) FROM posts"
@@ -219,12 +221,14 @@ def add_post(
         conn.execute("UPDATE posts SET content_version = 1 WHERE id = ?", (post_id,))
         content.refresh_hash(conn, post_id)
         errors, warnings = validate.validate(conn, post_id, platform_limits(conn), cfg, "add")
-        _raise_first(errors)
+        raise_first(errors)
         detail: dict[str, object] = {}
         if approver_confirmed:
             detail = {"approver_confirmed": approver_confirmed, "words": words}
         _event(conn, cfg, actor_id, "add", post_id, None, detail or None)
-        result = _result(conn, post_id, f"manager: send a card (brandcal preview {post_id})", [])
+        result = post_result(
+            conn, post_id, f"manager: send a card (brandcal preview {post_id})", []
+        )
     if approver_confirmed:
         result["next"] = (
             f"manager: approver confirmed in {approver_confirmed}; record it with"
@@ -255,7 +259,9 @@ def _mutate(
         _touch(conn, cfg, post_id)
         content.refresh_hash(conn, post_id)
         _event(conn, cfg, actor_id, action, post_id, before, detail)
-        return _result(conn, post_id, "manager: send a card (brandcal preview " + post_id + ")", [])
+        return post_result(
+            conn, post_id, "manager: send a card (brandcal preview " + post_id + ")", []
+        )
 
 
 def edit_post(
@@ -272,7 +278,7 @@ def edit_post(
     for item in assignments:
         field, sep, raw = item.partition("=")
         if not sep or field not in EDITABLE:
-            raise _bad(f"Cannot edit {item!r}.", f"Use field=value with: {' '.join(EDITABLE)}")
+            raise bad_args(f"Cannot edit {item!r}.", f"Use field=value with: {' '.join(EDITABLE)}")
         value: object = raw or None
         if value is not None:
             if field == "window":
@@ -281,7 +287,7 @@ def edit_post(
                 value = normalise_time(raw, tz)
             elif field == "series_pos":
                 if not raw.isdigit():
-                    raise _bad("series_pos must be a whole number.")
+                    raise bad_args("series_pos must be a whole number.")
                 value = int(raw)
         values[field] = value
 
@@ -306,7 +312,7 @@ def _renumber(conn: sqlite3.Connection, post_id: str, ids: list[int]) -> None:
 
 def _check_pos(ids: list[int], pos: int, *, extra: int = 0) -> None:
     if not 1 <= pos <= len(ids) + extra:
-        raise _bad(f"Position {pos} is out of range 1..{len(ids) + extra}.")
+        raise bad_args(f"Position {pos} is out of range 1..{len(ids) + extra}.")
 
 
 def part_add(
@@ -383,10 +389,10 @@ def part_rm(
         ids = _part_ids(conn, post_id)
         _check_pos(ids, pos)
         if len(ids) == 1:
-            raise _bad("A post needs at least one part.")
+            raise bad_args("A post needs at least one part.")
         gone = ids.pop(pos - 1)
         if conn.execute("SELECT 1 FROM media WHERE part_id = ?", (gone,)).fetchone():
-            raise _bad(f"Part {pos} has media and cannot be removed.")
+            raise bad_args(f"Part {pos} has media and cannot be removed.")
         conn.execute("DELETE FROM parts WHERE id = ?", (gone,))
         _renumber(conn, post_id, ids)
 
@@ -426,7 +432,7 @@ def media_add(
         content.refresh_hash(conn, post_id)
         _touch(conn, cfg, post_id)
         _event(conn, cfg, actor_id, "media_add", post_id, post["status"], {"media": row["id"]})
-        return _result(conn, post_id, f"brandcal check {post_id}", [])
+        return post_result(conn, post_id, f"brandcal check {post_id}", [])
 
 
 # --- notes and keywords ------------------------------------------------------------------
@@ -439,16 +445,16 @@ def add_note(
     post_id: str,
     text: str,
 ) -> Any:
-    at = _now(cfg)[0]
+    at = now_and_month(cfg)[0]
     with transaction(conn):
-        status = _load(conn, post_id)["status"]
+        status = load_post(conn, post_id)["status"]
         conn.execute(
             "UPDATE posts SET notes = CASE WHEN notes IS NULL THEN ? ELSE notes || char(10) || ?"
             " END, updated_at = ? WHERE id = ?",
             (line := f"{at} {actor_id}: {text}", line, at, post_id),
         )
         _event(conn, cfg, actor_id, "note", post_id, status)
-        return _result(conn, post_id, "", [])
+        return post_result(conn, post_id, "", [])
 
 
 def set_keywords(
@@ -459,13 +465,13 @@ def set_keywords(
     words: Sequence[str],
 ) -> Any:
     with transaction(conn):
-        status = _load(conn, post_id)["status"]
+        status = load_post(conn, post_id)["status"]
         conn.execute(
             "UPDATE posts SET keywords = ? WHERE id = ?", (json.dumps(list(words)), post_id)
         )
         _touch(conn, cfg, post_id)
         _event(conn, cfg, actor_id, "keywords", post_id, status, {"keywords": list(words)})
-        return _result(conn, post_id, "", [])
+        return post_result(conn, post_id, "", [])
 
 
 # --- check and submit --------------------------------------------------------------------
@@ -473,10 +479,10 @@ def set_keywords(
 
 def check_post(conn: sqlite3.Connection, cfg: Mapping[str, Any], post_id: str) -> Any:
     """Validate at the strict stage. Read-only."""
-    _load(conn, post_id)
+    load_post(conn, post_id)
     errors, warnings = validate.validate(conn, post_id, platform_limits(conn), cfg, "check")
-    _raise_first(errors)
-    return _result(
+    raise_first(errors)
+    return post_result(
         conn, post_id, "ready for approval" if not warnings else "review warnings", warnings
     )
 
@@ -489,7 +495,7 @@ def submit_post(
     post_id: str,
 ) -> Any:
     with transaction(conn):
-        post = _load(conn, post_id)
+        post = load_post(conn, post_id)
         check_transition(post["status"], "pending_approval", role)
         last = conn.execute(
             "SELECT content_hash FROM approvals WHERE post_id = ? AND decision = 'request_changes'"
@@ -503,10 +509,10 @@ def submit_post(
                 "Edit the post first, then submit again.",
             )
         errors, warnings = validate.validate(conn, post_id, platform_limits(conn), cfg, "check")
-        _raise_first(errors)
+        raise_first(errors)
         conn.execute("UPDATE posts SET status = 'pending_approval' WHERE id = ?", (post_id,))
         _touch(conn, cfg, post_id)
         _event(conn, cfg, actor_id, "submit", post_id, post["status"])
-        out = _result(conn, post_id, f"manager: send a card (brandcal preview {post_id})", [])
+        out = post_result(conn, post_id, f"manager: send a card (brandcal preview {post_id})", [])
     out["warnings"] = warnings
     return out

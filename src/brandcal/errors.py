@@ -98,6 +98,15 @@ class ErrorCode(StrEnum):
     INVALID_POST = "INVALID_POST"
     """The post's structure breaks a rule (part count, target URL, article title or body)."""
 
+    HASH_MISMATCH = "HASH_MISMATCH"
+    """The content hash given, or recomputed from the files, does not match the post."""
+
+    CLAIMED = "CLAIMED"
+    """The post is claimed for publishing by a manager."""
+
+    URL_CONFLICT = "URL_CONFLICT"
+    """The post is already published with a different URL."""
+
 
 EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.TIME_OFFSET_REQUIRED: ExitCode.VALIDATION,
@@ -124,6 +133,9 @@ EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.NOT_FOUND: ExitCode.NOT_FOUND,
     ErrorCode.POST_CLOSED: ExitCode.BAD_STATE,
     ErrorCode.INVALID_POST: ExitCode.VALIDATION,
+    ErrorCode.HASH_MISMATCH: ExitCode.APPROVAL_MISMATCH,
+    ErrorCode.CLAIMED: ExitCode.CONFLICT,
+    ErrorCode.URL_CONFLICT: ExitCode.CONFLICT,
 }
 """Exit code for each error code. TODO: add the remaining codes as commands land."""
 
