@@ -153,6 +153,14 @@ def _touch(conn: sqlite3.Connection, cfg: Mapping[str, Any], post_id: str) -> No
 # --- add ---------------------------------------------------------------------------------
 
 
+def next_post_id(conn: sqlite3.Connection) -> str:
+    """The next free post id (SPEC 5.5): p plus a zero-padded counter."""
+    n = conn.execute(
+        "SELECT COALESCE(MAX(CAST(substr(id, 2) AS INTEGER)), 0) FROM posts WHERE id GLOB 'p[0-9]*'"
+    ).fetchone()[0]
+    return f"p{n + 1:04d}"
+
+
 def add_post(
     conn: sqlite3.Connection,
     actor_id: str,
@@ -196,11 +204,7 @@ def add_post(
         raise bad_args("keywords must be a list.")
     now = now_and_month(cfg)[0]
     with transaction(conn):
-        n = conn.execute(
-            "SELECT COALESCE(MAX(CAST(substr(id, 2) AS INTEGER)), 0) FROM posts"
-            " WHERE id GLOB 'p[0-9]*'"
-        ).fetchone()[0]
-        post_id = f"p{n + 1:04d}"
+        post_id = next_post_id(conn)
         conn.execute(
             'INSERT INTO posts (id, slug, title, platform, post_type, owner, "window", series_id,'
             " series_pos, campaign, pillar, keywords, first_comment, target_url,"
