@@ -44,6 +44,21 @@ class ErrorCode(StrEnum):
     COMMENT_NOT_DELEGATED = "COMMENT_NOT_DELEGATED"
     """Agents never post comments unless a human has delegated that exact comment."""
 
+    BAD_ARGS = "BAD_ARGS"
+    """The command line could not be understood."""
+
+    TZ_NOT_CONFIGURED = "TZ_NOT_CONFIGURED"
+    """No display timezone is configured (config.json "timezone" or BRANDCAL_TZ)."""
+
+    HOME_NOT_CONFIGURED = "HOME_NOT_CONFIGURED"
+    """No data directory is configured (BRANDCAL_HOME or --home)."""
+
+    BAD_TIME = "BAD_TIME"
+    """A date or time could not be parsed."""
+
+    BAD_WINDOW = "BAD_WINDOW"
+    """A time window is not a valid ISO 8601 interval within one local date."""
+
 
 EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.TIME_OFFSET_REQUIRED: ExitCode.VALIDATION,
@@ -52,6 +67,11 @@ EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.NO_FRESH_BACKUP: ExitCode.BAD_STATE,
     ErrorCode.WINDOW_NOT_APPROVED: ExitCode.APPROVAL_MISMATCH,
     ErrorCode.CHECK_LIVE_FIRST: ExitCode.CONFLICT,
+    ErrorCode.BAD_ARGS: ExitCode.USAGE,
+    ErrorCode.TZ_NOT_CONFIGURED: ExitCode.USAGE,
+    ErrorCode.HOME_NOT_CONFIGURED: ExitCode.USAGE,
+    ErrorCode.BAD_TIME: ExitCode.VALIDATION,
+    ErrorCode.BAD_WINDOW: ExitCode.VALIDATION,
 }
 """Exit code for each error code. TODO: add the remaining codes as commands land."""
 
@@ -59,3 +79,23 @@ EXIT_CODES: dict[ErrorCode, ExitCode] = {
 def exit_code_for(code: ErrorCode) -> int:
     """Return the process exit code for an error code."""
     return int(EXIT_CODES[code])
+
+
+class BrandcalError(Exception):
+    """An expected failure with a stable code, a message and a suggested next step."""
+
+    def __init__(self, code: ErrorCode, message: str, next_step: str = "") -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.next_step = next_step
+
+    @property
+    def exit_code(self) -> int:
+        return exit_code_for(self.code)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "ok": False,
+            "error": {"code": self.code.value, "message": self.message, "next": self.next_step},
+        }
