@@ -83,6 +83,18 @@ class ErrorCode(StrEnum):
     MEDIA_INVALID = "MEDIA_INVALID"
     """A media file failed its checks (type, size, alt text, count)."""
 
+    TOO_LONG = "TOO_LONG"
+    """A part's text is over the platform's character limit."""
+
+    ON_HOLD = "ON_HOLD"
+    """The post has a hold that has not been cleared."""
+
+    NOT_FOUND = "NOT_FOUND"
+    """No such post in the live calendar."""
+
+    POST_CLOSED = "POST_CLOSED"
+    """The post is published or cancelled and can no longer be changed."""
+
 
 EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.TIME_OFFSET_REQUIRED: ExitCode.VALIDATION,
@@ -104,6 +116,10 @@ EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.APPEND_ONLY: ExitCode.BAD_STATE,
     ErrorCode.NO_AGENT: ExitCode.USAGE,
     ErrorCode.MEDIA_INVALID: ExitCode.VALIDATION,
+    ErrorCode.TOO_LONG: ExitCode.VALIDATION,
+    ErrorCode.ON_HOLD: ExitCode.VALIDATION,
+    ErrorCode.NOT_FOUND: ExitCode.NOT_FOUND,
+    ErrorCode.POST_CLOSED: ExitCode.BAD_STATE,
 }
 """Exit code for each error code. TODO: add the remaining codes as commands land."""
 

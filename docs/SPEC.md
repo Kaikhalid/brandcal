@@ -562,7 +562,7 @@ Error (to stdout, same shape always):
 | 2 | usage or configuration error | `BAD_ARGS`, `TZ_NOT_CONFIGURED`, `HOME_NOT_CONFIGURED`, `NO_AGENT`, `EXTRA_NOT_INSTALLED` |
 | 3 | validation failed | `MEDIA_INVALID`, `TOO_LONG`, `ON_HOLD`, `TIME_OFFSET_REQUIRED`, `BAD_WINDOW`, `BAD_TIME` |
 | 4 | not allowed for this agent, or without delegation | `ROLE_NOT_ALLOWED`, `COMMENT_NOT_DELEGATED` |
-| 5 | illegal transition or not allowed in this state | `BAD_TRANSITION`, `APPEND_ONLY`, `EDIT_WHILE_SCHEDULED`, `EDIT_WHILE_CLAIMED`, `NATIVELY_SCHEDULED`, `NO_FRESH_BACKUP` |
+| 5 | illegal transition or not allowed in this state | `BAD_TRANSITION`, `APPEND_ONLY`, `POST_CLOSED`, `EDIT_WHILE_SCHEDULED`, `EDIT_WHILE_CLAIMED`, `NATIVELY_SCHEDULED`, `NO_FRESH_BACKUP` |
 | 6 | stale approval, hash mismatch, bad signature, unapproved time | `STALE_APPROVAL`, `HASH_MISMATCH`, `BAD_SIGNATURE`, `WINDOW_NOT_APPROVED` |
 | 7 | not found in the live calendar | `NOT_FOUND`, `ARCHIVED` |
 | 8 | conflict | `CLAIMED`, `URL_CONFLICT`, `CHECK_LIVE_FIRST` |
