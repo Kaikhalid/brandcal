@@ -71,6 +71,18 @@ class ErrorCode(StrEnum):
     EDIT_WHILE_CLAIMED = "EDIT_WHILE_CLAIMED"
     """Edits are refused while the post is claimed for publishing."""
 
+    STALE_APPROVAL = "STALE_APPROVAL"
+    """No approval matches the post's current content version and hash."""
+
+    APPEND_ONLY = "APPEND_ONLY"
+    """Events and approvals are never changed, and deleted only by an archive run."""
+
+    NO_AGENT = "NO_AGENT"
+    """No acting agent given (--as or BRANDCAL_AGENT), or the agent is unknown."""
+
+    MEDIA_INVALID = "MEDIA_INVALID"
+    """A media file failed its checks (type, size, alt text, count)."""
+
 
 EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.TIME_OFFSET_REQUIRED: ExitCode.VALIDATION,
@@ -88,6 +100,10 @@ EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.BAD_TRANSITION: ExitCode.BAD_STATE,
     ErrorCode.EDIT_WHILE_SCHEDULED: ExitCode.BAD_STATE,
     ErrorCode.EDIT_WHILE_CLAIMED: ExitCode.BAD_STATE,
+    ErrorCode.STALE_APPROVAL: ExitCode.APPROVAL_MISMATCH,
+    ErrorCode.APPEND_ONLY: ExitCode.BAD_STATE,
+    ErrorCode.NO_AGENT: ExitCode.USAGE,
+    ErrorCode.MEDIA_INVALID: ExitCode.VALIDATION,
 }
 """Exit code for each error code. TODO: add the remaining codes as commands land."""
 

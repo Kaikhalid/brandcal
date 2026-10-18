@@ -259,13 +259,13 @@ CREATE TABLE transitions (from_status TEXT NOT NULL, to_status TEXT NOT NULL, ro
                           PRIMARY KEY (from_status, to_status));
 ```
 
-**Triggers** (each one a separate, named trigger with its own test):
+**Triggers** (each one a separate, named trigger with its own test). Append-only and delete guards (T-g, T-h) abort with `APPEND_ONLY`. The `system` agent always exists, since triggers write events as `system`:
 
 | # | Name (suggested) | Rule |
 |---|---|---|
 | T-a | `posts_insert_status` | INSERT into posts must have status `pending_approval`, unless `legacy_id` is set (migration only). |
 | T-b | `posts_status_transition` | UPDATE of `posts.status` to a different value must match a row in `transitions`, else ABORT `BAD_TRANSITION`. |
-| T-c | `posts_approved_needs_approval` | Status → `approved` needs an approvals row (`approve`, or `reschedule` from `missed`) for the current `content_version` and `content_hash`. |
+| T-c | `posts_approved_needs_approval` | Status → `approved` needs an approvals row (`approve`, or `reschedule` from `missed`) for the current `content_version` and `content_hash`. Else `STALE_APPROVAL`. |
 | T-d | `posts_published_needs_approval` | Status → `published` needs a valid approval for the current version (legacy rows excepted). |
 | T-e | `*_edit_while_queued` | BEFORE UPDATE/INSERT/DELETE on parts and media, and BEFORE UPDATE of `first_comment`, `target_url`, `post_type` or `window` on posts: ABORT `EDIT_WHILE_SCHEDULED` if the post has `native_scheduled_at`, `EDIT_WHILE_CLAIMED` if it has `claimed_by`. Runs before T-f. |
 | T-f | `*_content_bump` | AFTER a content change (parts, media, `first_comment`, `target_url`, `post_type`): bump `content_version`; if status was `approved` or `missed`, set it to `pending_approval` and write an event. A `window` change alone does not bump the version (SPEC 5.4). |
@@ -562,7 +562,7 @@ Error (to stdout, same shape always):
 | 2 | usage or configuration error | `BAD_ARGS`, `TZ_NOT_CONFIGURED`, `HOME_NOT_CONFIGURED`, `NO_AGENT`, `EXTRA_NOT_INSTALLED` |
 | 3 | validation failed | `MEDIA_INVALID`, `TOO_LONG`, `ON_HOLD`, `TIME_OFFSET_REQUIRED`, `BAD_WINDOW`, `BAD_TIME` |
 | 4 | not allowed for this agent, or without delegation | `ROLE_NOT_ALLOWED`, `COMMENT_NOT_DELEGATED` |
-| 5 | illegal transition or not allowed in this state | `BAD_TRANSITION`, `EDIT_WHILE_SCHEDULED`, `EDIT_WHILE_CLAIMED`, `NATIVELY_SCHEDULED`, `NO_FRESH_BACKUP` |
+| 5 | illegal transition or not allowed in this state | `BAD_TRANSITION`, `APPEND_ONLY`, `EDIT_WHILE_SCHEDULED`, `EDIT_WHILE_CLAIMED`, `NATIVELY_SCHEDULED`, `NO_FRESH_BACKUP` |
 | 6 | stale approval, hash mismatch, bad signature, unapproved time | `STALE_APPROVAL`, `HASH_MISMATCH`, `BAD_SIGNATURE`, `WINDOW_NOT_APPROVED` |
 | 7 | not found in the live calendar | `NOT_FOUND`, `ARCHIVED` |
 | 8 | conflict | `CLAIMED`, `URL_CONFLICT`, `CHECK_LIVE_FIRST` |
