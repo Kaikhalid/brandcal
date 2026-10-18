@@ -27,7 +27,7 @@ def test_cli_version_subprocess() -> None:
 
 def test_cli_help_exits_zero(capsys) -> None:  # type: ignore[no-untyped-def]
     assert cli.main(["help"]) == 0
-    assert "Planned commands" in capsys.readouterr().out
+    assert '"approve"' in capsys.readouterr().out
     assert cli.main([]) == 0
 
 
