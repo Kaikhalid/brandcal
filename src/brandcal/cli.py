@@ -5,12 +5,15 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sqlite3
 import sys
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
 
-from brandcal import __version__
+from brandcal import __version__, posts
 from brandcal import config as cfgmod
 from brandcal.db import init_db, open_db
 from brandcal.errors import EXIT_CODES, BrandcalError, ErrorCode
@@ -123,6 +126,46 @@ def build_parser() -> argparse.ArgumentParser:
     help_p.add_argument("topic", nargs="?")
     sub.add_parser("schema", parents=[common], add_help=False)
     sub.add_parser("init", parents=[common], add_help=False)
+    add_p = sub.add_parser("add", parents=[common], add_help=False)
+    add_p.add_argument("--approver-confirmed", metavar="MSG")
+    add_p.add_argument("--words")
+    add_p.add_argument("--type", dest="post_type")
+    add_p.add_argument("--delegation-msg")
+    add_p.add_argument("--delegation-words")
+    edit_p = sub.add_parser("edit", parents=[common], add_help=False)
+    edit_p.add_argument("id")
+    edit_p.add_argument("assignments", nargs="+", metavar="field=value")
+    part_p = sub.add_parser("part", parents=[common], add_help=False)
+    part_sub = part_p.add_subparsers(dest="part_cmd", parser_class=_Parser, required=True)
+    for name, extra in (("add", ["text"]), ("edit", ["pos", "text"])):
+        p = part_sub.add_parser(name, parents=[common], add_help=False)
+        for arg in ["id", *extra]:
+            p.add_argument(arg, type=int if arg == "pos" else str)
+        if name == "add":
+            p.add_argument("--pos", type=int)
+    for name, extra in (("move", ["from_pos", "to_pos"]), ("rm", ["pos"])):
+        p = part_sub.add_parser(name, parents=[common], add_help=False)
+        p.add_argument("id")
+        for arg in extra:
+            p.add_argument(arg, type=int)
+    media_p = sub.add_parser("media", parents=[common], add_help=False)
+    media_sub = media_p.add_subparsers(dest="media_cmd", parser_class=_Parser, required=True)
+    madd = media_sub.add_parser("add", parents=[common], add_help=False)
+    madd.add_argument("id")
+    madd.add_argument("part", type=int)
+    madd.add_argument("file")
+    madd.add_argument("--alt", required=True)
+    madd.add_argument("--credit")
+    madd.add_argument("--source")
+    madd.add_argument("--licence")
+    note_p = sub.add_parser("note", parents=[common], add_help=False)
+    note_p.add_argument("id")
+    note_p.add_argument("text")
+    kw_p = sub.add_parser("keywords", parents=[common], add_help=False)
+    kw_p.add_argument("id")
+    kw_p.add_argument("words", nargs="*")
+    for name in ("check", "submit"):
+        sub.add_parser(name, parents=[common], add_help=False).add_argument("id")
     return parser
 
 
@@ -189,7 +232,130 @@ def cmd_init(args: argparse.Namespace) -> dict[str, object]:
     return {"ok": True, "db": "brand.db"}
 
 
-COMMAND_FUNCS = {"help": cmd_help, "schema": cmd_schema, "init": cmd_init}
+@contextmanager
+def _session(args: argparse.Namespace, write: bool = True) -> Iterator[_Session]:
+    """Open home/brand.db with the display timezone; writes also resolve the acting agent."""
+    base = cfgmod.home(args.home)
+    cfg = cfgmod.load_config(base)
+    who, role = actor(args, cfg) if write else ("", "")
+    if not (base / "brand.db").is_file():
+        raise BrandcalError(ErrorCode.BAD_ARGS, "No brand.db here.", "Run: brandcal init")
+    conn = open_db(base / "brand.db", cfgmod.display_tz(cfg))
+    try:
+        yield _Session(conn, base, cfg, who, role)
+    finally:
+        conn.close()
+
+
+@dataclass
+class _Session:
+    conn: sqlite3.Connection
+    base: Path
+    cfg: dict[str, Any]
+    who: str
+    role: str
+
+
+def cmd_add(args: argparse.Namespace) -> dict[str, object]:
+    try:
+        data = json.loads(sys.stdin.read())
+    except ValueError as err:
+        raise BrandcalError(ErrorCode.BAD_ARGS, f"stdin is not valid JSON: {err}.") from None
+    if not isinstance(data, dict):
+        raise BrandcalError(ErrorCode.BAD_ARGS, "stdin must be one JSON object.")
+    for key, value in (
+        ("post_type", args.post_type),
+        ("delegation_msg_id", args.delegation_msg),
+        ("delegation_words", args.delegation_words),
+    ):
+        if value:
+            data[key] = value
+    with _session(args) as s:
+        out: dict[str, object] = posts.add_post(
+            s.conn, s.who, s.role, s.cfg, data, args.approver_confirmed, args.words
+        )
+        return out
+
+
+def cmd_edit(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args) as s:
+        out: dict[str, object] = posts.edit_post(
+            s.conn, s.who, s.role, s.cfg, args.id, args.assignments
+        )
+        return out
+
+
+def cmd_part(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args) as s:
+        c, w, r, g = s.conn, s.who, s.role, s.cfg
+        out: dict[str, object]
+        if args.part_cmd == "add":
+            out = posts.part_add(c, w, r, g, args.id, args.text, args.pos)
+        elif args.part_cmd == "edit":
+            out = posts.part_edit(c, w, r, g, args.id, args.pos, args.text)
+        elif args.part_cmd == "move":
+            out = posts.part_move(c, w, r, g, args.id, args.from_pos, args.to_pos)
+        else:
+            out = posts.part_rm(c, w, r, g, args.id, args.pos)
+        return out
+
+
+def cmd_media(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args) as s:
+        out: dict[str, object] = posts.media_add(
+            s.conn,
+            s.who,
+            s.role,
+            s.cfg,
+            s.base,
+            args.id,
+            args.part,
+            Path(args.file),
+            args.alt,
+            args.credit,
+            args.source,
+            args.licence,
+        )
+        return out
+
+
+def cmd_note(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args) as s:
+        out: dict[str, object] = posts.add_note(s.conn, s.who, s.cfg, args.id, args.text)
+        return out
+
+
+def cmd_keywords(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args) as s:
+        out: dict[str, object] = posts.set_keywords(s.conn, s.who, s.cfg, args.id, args.words)
+        return out
+
+
+def cmd_check(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args, write=False) as s:
+        out: dict[str, object] = posts.check_post(s.conn, s.cfg, args.id)
+        return out
+
+
+def cmd_submit(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args) as s:
+        out: dict[str, object] = posts.submit_post(s.conn, s.who, s.role, s.cfg, args.id)
+        return out
+
+
+COMMAND_FUNCS = {
+    "help": cmd_help,
+    "schema": cmd_schema,
+    "init": cmd_init,
+    "add": cmd_add,
+    "edit": cmd_edit,
+    "part": cmd_part,
+    "media": cmd_media,
+    "note": cmd_note,
+    "keywords": cmd_keywords,
+    "check": cmd_check,
+    "submit": cmd_submit,
+}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
