@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
 
-from brandcal import __version__, approvals, posts, publish, sweep
+from brandcal import __version__, approvals, audit, posts, publish, sweep
 from brandcal import config as cfgmod
 from brandcal.db import init_db, open_db
 from brandcal.errors import EXIT_CODES, BrandcalError, ErrorCode
@@ -217,6 +217,7 @@ def build_parser() -> argparse.ArgumentParser:
     failed_p.add_argument("id")
     failed_p.add_argument("--reason", required=True)
     sub.add_parser("sweep", parents=[common], add_help=False)
+    sub.add_parser("audit", parents=[common], add_help=False)
     return parser
 
 
@@ -485,6 +486,13 @@ def cmd_sweep(args: argparse.Namespace) -> dict[str, object]:
         return out
 
 
+def cmd_audit(args: argparse.Namespace) -> dict[str, object]:
+    """Read-only; exits 0 even with flags, the caller reads ok and flags."""
+    with _session(args, write=False) as s:
+        out: dict[str, object] = audit.audit(s.conn, s.base)
+        return out
+
+
 COMMAND_FUNCS = {
     "help": cmd_help,
     "schema": cmd_schema,
@@ -508,6 +516,7 @@ COMMAND_FUNCS = {
     "published": cmd_published,
     "failed": cmd_failed,
     "sweep": cmd_sweep,
+    "audit": cmd_audit,
 }
 
 
