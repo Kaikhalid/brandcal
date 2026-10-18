@@ -13,7 +13,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
 
-from brandcal import __version__, approvals, audit, posts, publish, reports, sweep, timefmt
+from brandcal import (
+    __version__,
+    approvals,
+    audit,
+    backup,
+    posts,
+    publish,
+    reports,
+    sweep,
+    timefmt,
+)
 from brandcal import config as cfgmod
 from brandcal.db import init_db, open_db
 from brandcal.errors import EXIT_CODES, BrandcalError, ErrorCode
@@ -235,6 +245,10 @@ def build_parser() -> argparse.ArgumentParser:
     render_p = sub.add_parser("render", parents=[common], add_help=False)
     render_sub = render_p.add_subparsers(dest="render_cmd", parser_class=_Parser, required=True)
     render_sub.add_parser("week", parents=[common], add_help=False).add_argument("--out")
+    sub.add_parser("export", parents=[common], add_help=False)
+    backup_p = sub.add_parser("backup", parents=[common], add_help=False)
+    backup_sub = backup_p.add_subparsers(dest="backup_cmd", parser_class=_Parser)
+    backup_sub.add_parser("restore-test", parents=[common], add_help=False)
     return parser
 
 
@@ -560,7 +574,35 @@ def cmd_render(args: argparse.Namespace) -> dict[str, object]:
     return {"ok": True, "html": page}
 
 
+def _admin_or_system(role: str) -> None:
+    if role not in ("admin", "system"):
+        raise BrandcalError(ErrorCode.ROLE_NOT_ALLOWED, "Only an admin or system may run this.")
+
+
+def cmd_export(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args) as s:
+        _admin_or_system(s.role)
+        out: dict[str, object] = backup.export(s.conn, s.cfg, s.base)
+        return out
+
+
+def cmd_backup(args: argparse.Namespace) -> dict[str, object]:
+    if args.backup_cmd == "restore-test":
+        # Never opens the live database: only home and config are needed.
+        base = cfgmod.home(args.home)
+        cfg = cfgmod.load_config(base)
+        _admin_or_system(actor(args, cfg)[1])
+        out: dict[str, object] = backup.restore_test(base, cfg)
+        return out
+    with _session(args) as s:
+        _admin_or_system(s.role)
+        out = backup.backup(s.conn, s.cfg, s.base, s.who)
+        return out
+
+
 COMMAND_FUNCS = {
+    "export": cmd_export,
+    "backup": cmd_backup,
     "next": cmd_next,
     "today": cmd_today,
     "tomorrow": cmd_today,
