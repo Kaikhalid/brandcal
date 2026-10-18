@@ -248,7 +248,7 @@ CREATE TABLE events (
   from_status TEXT, to_status TEXT,
   detail TEXT CHECK (detail IS NULL OR json_valid(detail)),
   reason TEXT,
-  chain TEXT NOT NULL,                        -- 'post:<id>' or 'month:YYYY-MM' (local month)
+  chain TEXT NOT NULL,                        -- 'post:<id>', 'month:YYYY-MM' (local month) or 'archive'
   prev_hash TEXT, row_hash TEXT NOT NULL
 );
 
@@ -321,7 +321,8 @@ part=<pos>
 ### 5.5 IDs
 
 - Post ids are `p` plus a zero-padded counter (`p0001`), permanent and date-free; `slug` is
-  the human label.
+  the human label. Ids are never reused: the next id is one more than the highest of the live
+  posts and every archive manifest.
 - `platform_post_id` and `platform_url` exist on the post and on each part (each item of a
   thread has its own).
 - `series_id` and `series_pos` link related posts and follow-ups.
@@ -675,6 +676,11 @@ Chains are per post (`post:<id>`) or per local month for post-less events, so ea
 moves whole and still verifies inside its file. The `archive_written` event and a `manifest`
 table in the archive file (one row per post: post id, last `row_hash`) anchor the chains, so
 `audit` can show that no archived post or the tail of its history is missing.
+
+`archive_written` events go on their own chain, `archive`, which is never archived, so every
+archive file's checksum and manifest stay in the live database (`audit`, `backup` and new post
+ids rely on them). The archive file is created without triggers: its rows are copies, never
+edited.
 
 ### 10.6 Backups
 

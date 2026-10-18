@@ -130,7 +130,13 @@ def test_post_less_month_chains_verify(conn: sqlite3.Connection, home: Path) -> 
             )  # fmt: skip
     report = audit(conn, home)
     assert report["ok"] is True
-    assert report["checked"] == {"chains": 2, "events": 3, "published": 0, "media": 0}
+    assert report["checked"] == {
+        "chains": 2,
+        "events": 3,
+        "published": 0,
+        "media": 0,
+        "archives": 0,
+    }
 
 
 def test_published_without_matching_approval_is_flagged(

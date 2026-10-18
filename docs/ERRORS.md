@@ -31,6 +31,7 @@ Exit 0 is success and exit 1 is never used deliberately (it means an unexpected 
 | 6 | `HASH_MISMATCH` | The content hash given, or recomputed from the files, does not match the post. |
 | 6 | `STALE_APPROVAL` | No approval matches the post's current content version and hash. |
 | 6 | `WINDOW_NOT_APPROVED` | The post's time window is not inside the window the approver agreed to. |
+| 7 | `ARCHIVED` | The post was moved to a monthly archive file; read it with archive show. |
 | 7 | `NOT_FOUND` | No such post in the live calendar. |
 | 8 | `CHECK_LIVE_FIRST` | A previous claim expired; confirm the post is not already live first. |
 | 8 | `CLAIMED` | The post is claimed for publishing by a manager. |

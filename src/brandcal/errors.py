@@ -107,6 +107,9 @@ class ErrorCode(StrEnum):
     URL_CONFLICT = "URL_CONFLICT"
     """The post is already published with a different URL."""
 
+    ARCHIVED = "ARCHIVED"
+    """The post was moved to a monthly archive file; read it with archive show."""
+
 
 EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.TIME_OFFSET_REQUIRED: ExitCode.VALIDATION,
@@ -136,6 +139,7 @@ EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.HASH_MISMATCH: ExitCode.APPROVAL_MISMATCH,
     ErrorCode.CLAIMED: ExitCode.CONFLICT,
     ErrorCode.URL_CONFLICT: ExitCode.CONFLICT,
+    ErrorCode.ARCHIVED: ExitCode.NOT_FOUND,
 }
 """Exit code for each error code. TODO: add the remaining codes as commands land."""
 

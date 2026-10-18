@@ -108,25 +108,51 @@ def list_posts(
     date_to: str | None = None,
     platform: str | None = None,
     closed: bool = False,
+    with_archive: bool = False,
+    home: Path | None = None,
 ) -> list[dict[str, Any]]:
     lo = None if date_from is None else timefmt.parse_date(date_from)
     hi = None if date_to is None else timefmt.parse_date(date_to)
-    out = []
-    for p in conn.execute("SELECT * FROM posts ORDER BY window_start_utc, id"):
+
+    def keep(p: sqlite3.Row, archived: bool) -> bool:
         if status is not None and p["status"] != status:
-            continue
-        if status is None and not closed and p["status"] in CLOSED:
-            continue
+            return False
+        if status is None and not closed and not archived and p["status"] in CLOSED:
+            return False
         if platform is not None and p["platform"] != platform:
-            continue
+            return False
         if lo is not None or hi is not None:
             if p["window"] is None:
-                continue
+                return False
             d = _local_day(p, cfg)
             if (lo is not None and d < lo) or (hi is not None and d > hi):
-                continue
-        out.append(short_row(p))
-    return out
+                return False
+        return True
+
+    query = "SELECT * FROM posts ORDER BY window_start_utc, id"
+    found = [
+        ((p["window_start_utc"] or "", p["id"]), short_row(p))
+        for p in conn.execute(query)
+        if keep(p, False)
+    ]
+    if with_archive:
+        if home is None:
+            raise BrandcalError(
+                ErrorCode.HOME_NOT_CONFIGURED, "The archive needs the data directory."
+            )
+        from brandcal import archive  # imported here: archive itself uses this module
+
+        for month, arc in archive.overlapping(home, lo, hi):
+            found += [
+                (
+                    (p["window_start_utc"] or "", p["id"]),
+                    {**short_row(p), "archived": True, "month": month},
+                )
+                for p in arc.execute(query)
+                if keep(p, True)
+            ]
+        found.sort(key=lambda item: item[0])
+    return [row for _, row in found]
 
 
 def show(conn: sqlite3.Connection, post_id: str, log: bool = False) -> dict[str, Any]:

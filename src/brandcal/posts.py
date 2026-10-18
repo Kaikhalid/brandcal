@@ -76,11 +76,28 @@ def now_and_month(cfg: Mapping[str, Any]) -> tuple[str, str]:
     return format_time(now), month_key(now, tz)
 
 
+def archived_posts(conn: sqlite3.Connection) -> dict[str, str]:
+    """Post id -> month for every post named in an archive_written manifest (SPEC 10.5)."""
+    rows = conn.execute(
+        "SELECT json_extract(m.value, '$.post_id'), json_extract(e.detail, '$.month')"
+        " FROM events e, json_each(e.detail, '$.manifest') m WHERE e.action = 'archive_written'"
+        " ORDER BY e.id"
+    )
+    return {str(r[0]): str(r[1]) for r in rows if r[0] is not None}
+
+
 def load_post(conn: sqlite3.Connection, post_id: str) -> sqlite3.Row:
     post: sqlite3.Row | None = conn.execute(
         "SELECT * FROM posts WHERE id = ?", (post_id,)
     ).fetchone()
     if post is None:
+        month = archived_posts(conn).get(post_id)
+        if month is not None:
+            raise BrandcalError(
+                ErrorCode.ARCHIVED,
+                f"{post_id} was archived in {month}.",
+                f"brandcal archive show {post_id} --month {month}",
+            )
         raise BrandcalError(ErrorCode.NOT_FOUND, f"No such post: {post_id}.", "Run: brandcal list")
     return post
 
@@ -154,10 +171,13 @@ def _touch(conn: sqlite3.Connection, cfg: Mapping[str, Any], post_id: str) -> No
 
 
 def next_post_id(conn: sqlite3.Connection) -> str:
-    """The next free post id (SPEC 5.5): p plus a zero-padded counter."""
+    """The next free post id (SPEC 5.5): one more than the live posts and every archive manifest."""
     n = conn.execute(
         "SELECT COALESCE(MAX(CAST(substr(id, 2) AS INTEGER)), 0) FROM posts WHERE id GLOB 'p[0-9]*'"
     ).fetchone()[0]
+    for post_id in archived_posts(conn):
+        if post_id[1:].isdigit():
+            n = max(n, int(post_id[1:]))
     return f"p{n + 1:04d}"
 
 
