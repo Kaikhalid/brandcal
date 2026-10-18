@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
 
-from brandcal import __version__, posts
+from brandcal import __version__, approvals, posts
 from brandcal import config as cfgmod
 from brandcal.db import init_db, open_db
 from brandcal.errors import EXIT_CODES, BrandcalError, ErrorCode
@@ -70,13 +70,28 @@ COMMANDS: dict[str, tuple[str, list[str], list[str]]] = {
     "check": ("ID", _ALL, _E_ID),
     "submit": ("ID", _W, _E_ID + ["BAD_TRANSITION", "ROLE_NOT_ALLOWED"]),
     "preview": ("ID", ["manager"], _E_ID),
-    "approve": ("ID ...", ["manager"], _E_ID + ["BAD_TRANSITION", "ROLE_NOT_ALLOWED"]),
-    "request-changes": ("ID ...", ["manager"], _E_ID + ["BAD_TRANSITION", "ROLE_NOT_ALLOWED"]),
-    "reschedule": ("ID ...", ["manager"], _E_ID + ["BAD_WINDOW", "BAD_TIME"]),
+    "approve": (
+        "ID --version N --hash H --channel card|writer-session --msg MSG --words TEXT"
+        " [--relayed-by NAME] [--approver NAME]",
+        ["manager"],
+        _E_ID + ["BAD_TRANSITION", "ROLE_NOT_ALLOWED", "STALE_APPROVAL", "ON_HOLD", "BAD_ARGS"],
+    ),
+    "request-changes": (
+        "ID --version N --hash H --msg MSG --words TEXT [--approver NAME]",
+        ["manager"],
+        _E_ID + ["BAD_TRANSITION", "ROLE_NOT_ALLOWED", "STALE_APPROVAL", "BAD_ARGS"],
+    ),
+    "reschedule": (
+        "ID --version N --hash H --window W --msg MSG --words TEXT [--approver NAME]",
+        ["manager"],
+        _E_ID
+        + ["BAD_WINDOW", "BAD_TIME", "STALE_APPROVAL", "EDIT_WHILE_SCHEDULED"]
+        + ["BAD_TRANSITION", "ROLE_NOT_ALLOWED", "BAD_ARGS"],
+    ),
     "cancel": (
-        "ID --kind idea|version|plan --reason TEXT",
+        "ID --kind idea|version|plan --reason TEXT [--msg MSG --words TEXT] [--approver NAME]",
         ["manager", "writer"],
-        _E_ID + ["BAD_TRANSITION", "ROLE_NOT_ALLOWED"],
+        _E_ID + ["POST_CLOSED", "NATIVELY_SCHEDULED", "CLAIMED", "ROLE_NOT_ALLOWED", "BAD_ARGS"],
     ),
     "schedule": ("ID --at TIME", ["manager"], _E_ID + ["WINDOW_NOT_APPROVED", "BAD_TIME"]),
     "unschedule": ("ID", ["manager"], _E_ID),
@@ -164,8 +179,29 @@ def build_parser() -> argparse.ArgumentParser:
     kw_p = sub.add_parser("keywords", parents=[common], add_help=False)
     kw_p.add_argument("id")
     kw_p.add_argument("words", nargs="*")
-    for name in ("check", "submit"):
+    for name in ("check", "submit", "preview"):
         sub.add_parser(name, parents=[common], add_help=False).add_argument("id")
+    for name, extra in (
+        ("approve", ["channel", "msg", "words"]),
+        ("request-changes", ["msg", "words"]),
+        ("reschedule", ["window", "msg", "words"]),
+    ):
+        p = sub.add_parser(name, parents=[common], add_help=False)
+        p.add_argument("id")
+        p.add_argument("--version", type=int, required=True)
+        p.add_argument("--hash", required=True)
+        for arg in extra:
+            p.add_argument(f"--{arg}", required=True)
+        p.add_argument("--approver")
+        if name == "approve":
+            p.add_argument("--relayed-by")
+    cancel_p = sub.add_parser("cancel", parents=[common], add_help=False)
+    cancel_p.add_argument("id")
+    cancel_p.add_argument("--kind", required=True)
+    cancel_p.add_argument("--reason", required=True)
+    cancel_p.add_argument("--msg")
+    cancel_p.add_argument("--words")
+    cancel_p.add_argument("--approver")
     return parser
 
 
@@ -343,6 +379,48 @@ def cmd_submit(args: argparse.Namespace) -> dict[str, object]:
         return out
 
 
+def cmd_preview(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args, write=False) as s:
+        out: dict[str, object] = approvals.preview(s.conn, s.cfg, args.id)
+        return out
+
+
+def cmd_approve(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args) as s:
+        out: dict[str, object] = approvals.approve(
+            s.conn, s.who, s.role, s.cfg, args.id, args.version, args.hash, args.channel,
+            args.msg, args.words, args.relayed_by, args.approver,
+        )  # fmt: skip
+        return out
+
+
+def cmd_request_changes(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args) as s:
+        out: dict[str, object] = approvals.request_changes(
+            s.conn, s.who, s.role, s.cfg, args.id, args.version, args.hash, args.msg, args.words,
+            args.approver,
+        )  # fmt: skip
+        return out
+
+
+def cmd_reschedule(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args) as s:
+        out: dict[str, object] = approvals.reschedule(
+            s.conn, s.who, s.role, s.cfg, args.id, args.version, args.hash, args.window,
+            args.msg, args.words, args.approver,
+        )  # fmt: skip
+        return out
+
+
+def cmd_cancel(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args) as s:
+        out: dict[str, object] = approvals.cancel(
+            s.conn, s.who, s.role, s.cfg, args.id, args.kind, args.reason, args.msg, args.words,
+            args.approver,
+        )  # fmt: skip
+        return out
+
+
 COMMAND_FUNCS = {
     "help": cmd_help,
     "schema": cmd_schema,
@@ -355,6 +433,11 @@ COMMAND_FUNCS = {
     "keywords": cmd_keywords,
     "check": cmd_check,
     "submit": cmd_submit,
+    "preview": cmd_preview,
+    "approve": cmd_approve,
+    "request-changes": cmd_request_changes,
+    "reschedule": cmd_reschedule,
+    "cancel": cmd_cancel,
 }
 
 
