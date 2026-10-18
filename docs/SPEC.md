@@ -273,6 +273,12 @@ CREATE TABLE transitions (from_status TEXT NOT NULL, to_status TEXT NOT NULL, ro
 | T-h | `events_no_delete`, `approvals_no_delete` | DELETE on events or approvals ABORTs unless `archive_lock.active = 1`. |
 | T-i | `approvals_roles` | INSERT into approvals checks the roles of `decided_by`, `relayed_by`, `recorded_by` against `agents`. |
 
+**Connection functions.** `db.open()` registers two SQL functions that triggers use:
+`bc_now()` (current time in the display timezone, SPEC 5.2 format) and
+`bc_row_hash(prev, at, actor, post_id, action, from_status, to_status, detail, reason, chain)`
+(same as `events.row_hash`). A connection without them (e.g. the plain `sqlite3` shell) cannot
+fire the content-edit triggers, which is intended: edits go through the tool.
+
 The CLI computes `content_hash` itself and sets schedule and claim fields to NULL in the same
 UPDATE as any status change. `archive_lock.active` is set to 1 and back to 0 inside the same
 transaction, so a crash leaves it at 0.
@@ -530,6 +536,7 @@ sequenceDiagram
 | `export` / `backup` / `backup restore-test` | SPEC 10.6 | admin, system |
 | `archive run [--month YYYY-MM] [--dry-run]` | SPEC 10 | admin, system |
 | `archive list/show/search/stats --month YYYY-MM …` | Read archive files (read-only) | all |
+| `init` | Create `brand.db` from the schema; seed transitions, agents and platforms from config (re-running only adds missing agents and platforms) | admin |
 | `migrate FILE [--dry-run]` | Import a v1 JSON calendar (SPEC 12) | admin |
 
 Identity: every write needs `--as NAME` or `BRANDCAL_AGENT`, naming an agent in the agents
