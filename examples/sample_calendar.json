@@ -1,0 +1,38 @@
+{
+  "calendar": "Example Co",
+  "display_timezone": "Europe/London",
+  "posts": [
+    {
+      "id": "p0001",
+      "platform": "linkedin",
+      "type": "post",
+      "status": "approved",
+      "window": "2026-03-02T09:00:00+00:00/2026-03-02T10:00:00+00:00",
+      "text": "Example Co is launching the Widget 2000. Read more at https://example.com/widget.",
+      "created_by": "writer",
+      "approved_by": "approver"
+    },
+    {
+      "id": "p0002",
+      "platform": "x",
+      "type": "thread",
+      "status": "pending_approval",
+      "window": "2026-03-03T08:30:00-05:00/2026-03-03T09:30:00-05:00",
+      "parts": [
+        "1/2 Five things we learnt building the Widget 2000.",
+        "2/2 Questions? Write to hello@example.com."
+      ],
+      "created_by": "writer"
+    },
+    {
+      "id": "p0003",
+      "platform": "linkedin",
+      "type": "post",
+      "status": "changes_requested",
+      "window": "2026-03-05T12:00:00+05:30/2026-03-05T13:00:00+05:30",
+      "text": "Meet the (entirely fictional) Example Co support team.",
+      "created_by": "writer",
+      "change_request": "Shorter, please, and add a link to https://example.org/team."
+    }
+  ]
+}

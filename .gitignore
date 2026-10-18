@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# brandcal data (never commit real calendars)
+*.sqlite
+*.sqlite3
+*.db
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+backups/
+archive/
+media/
+
+# Secrets and local config
+.env
+.env*
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
