@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
 
-from brandcal import __version__, approvals, audit, posts, publish, sweep
+from brandcal import __version__, approvals, audit, posts, publish, reports, sweep, timefmt
 from brandcal import config as cfgmod
 from brandcal.db import init_db, open_db
 from brandcal.errors import EXIT_CODES, BrandcalError, ErrorCode
@@ -218,6 +218,23 @@ def build_parser() -> argparse.ArgumentParser:
     failed_p.add_argument("--reason", required=True)
     sub.add_parser("sweep", parents=[common], add_help=False)
     sub.add_parser("audit", parents=[common], add_help=False)
+    for name in ("next", "today", "tomorrow"):
+        sub.add_parser(name, parents=[common], add_help=False)
+    list_p = sub.add_parser("list", parents=[common], add_help=False)
+    list_p.add_argument("--status")
+    list_p.add_argument("--from", dest="date_from")
+    list_p.add_argument("--to", dest="date_to")
+    list_p.add_argument("--platform")
+    list_p.add_argument("--closed", action="store_true")
+    show_p = sub.add_parser("show", parents=[common], add_help=False)
+    show_p.add_argument("id")
+    show_p.add_argument("--log", action="store_true")
+    report_p = sub.add_parser("report", parents=[common], add_help=False)
+    report_sub = report_p.add_subparsers(dest="report_cmd", parser_class=_Parser, required=True)
+    report_sub.add_parser("weekly", parents=[common], add_help=False).add_argument("--end")
+    render_p = sub.add_parser("render", parents=[common], add_help=False)
+    render_sub = render_p.add_subparsers(dest="render_cmd", parser_class=_Parser, required=True)
+    render_sub.add_parser("week", parents=[common], add_help=False).add_argument("--out")
     return parser
 
 
@@ -493,7 +510,64 @@ def cmd_audit(args: argparse.Namespace) -> dict[str, object]:
         return out
 
 
+def cmd_next(args: argparse.Namespace) -> dict[str, object]:
+    """The agent comes from --as only, so a manager can look up another agent's list."""
+    with _session(args, write=False) as s:
+        if not args.agent:
+            raise BrandcalError(ErrorCode.NO_AGENT, "No agent given.", "Pass --as NAME.")
+        return {"ok": True, "items": reports.next_for(s.conn, s.cfg, args.agent)}
+
+
+def cmd_today(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args, write=False) as s:
+        return {"ok": True, "items": reports.day(s.conn, s.cfg, args.command)}
+
+
+def cmd_list(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args, write=False) as s:
+        rows = reports.list_posts(
+            s.conn, s.cfg, args.status, args.date_from, args.date_to, args.platform, args.closed
+        )
+        return {"ok": True, "posts": rows}
+
+
+def cmd_show(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args, write=False) as s:
+        out: dict[str, object] = reports.show(s.conn, args.id, args.log)
+        return out
+
+
+def _manager_only(args: argparse.Namespace, cfg: dict[str, Any]) -> None:
+    if actor(args, cfg)[1] != "manager":
+        raise BrandcalError(ErrorCode.ROLE_NOT_ALLOWED, "Only a manager may run this command.")
+
+
+def cmd_report(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args, write=False) as s:
+        _manager_only(args, s.cfg)
+        end = None if args.end is None else timefmt.parse_date(args.end)
+        out: dict[str, object] = reports.weekly(s.conn, s.cfg, s.base, end)
+        return out
+
+
+def cmd_render(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args, write=False) as s:
+        _manager_only(args, s.cfg)
+        page = reports.render_week(s.conn, s.cfg)
+    if args.out:
+        Path(args.out).write_text(page, encoding="utf-8")
+        return {"ok": True, "out": args.out}
+    return {"ok": True, "html": page}
+
+
 COMMAND_FUNCS = {
+    "next": cmd_next,
+    "today": cmd_today,
+    "tomorrow": cmd_today,
+    "list": cmd_list,
+    "show": cmd_show,
+    "report": cmd_report,
+    "render": cmd_render,
     "help": cmd_help,
     "schema": cmd_schema,
     "init": cmd_init,
