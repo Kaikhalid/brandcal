@@ -40,8 +40,16 @@ path = "src/brandcal/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/brandcal"]
-# The web views are package data: they must ship in the wheel (served from brandcal/web/).
-artifacts = ["src/brandcal/web/*.html", "src/brandcal/web/*.css", "src/brandcal/web/*.js", "src/brandcal/web/*.svg"]
+# The web views are package data: they must ship in the wheel (served from brandcal/web/ at
+# /mvp/ and brandcal/web_next/ at /). web_next is the committed Next.js build, so pip users
+# never need Node.
+artifacts = [
+    "src/brandcal/web/*.html",
+    "src/brandcal/web/*.css",
+    "src/brandcal/web/*.js",
+    "src/brandcal/web/*.svg",
+    "src/brandcal/web_next/**",
+]
 
 [tool.ruff]
 line-length = 100

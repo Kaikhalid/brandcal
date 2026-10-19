@@ -37,6 +37,37 @@ jobs:
       - name: Privacy scan
         run: python scripts/privacy_scan.py
 
+  web:
+    name: web (Next.js build is current)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Node 20 is the major the committed build was made with; the output must be reproducible.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install
+        run: npm ci
+        working-directory: web
+      - name: Lint
+        run: npm run lint
+        working-directory: web
+      - name: Typecheck
+        run: npx tsc --noEmit
+        working-directory: web
+      - name: Build
+        run: npm run build
+        working-directory: web
+      - name: The committed build is current
+        run: |
+          git add --intent-to-add src/brandcal/web_next
+          if ! git diff --exit-code -- src/brandcal/web_next || [ -n "$(git status --porcelain --ignored -- src/brandcal/web_next)" ]; then
+            echo "::error::src/brandcal/web_next is stale. Run python scripts/build_ui.py and commit the result."
+            exit 1
+          fi
+
   ui-screens:
     name: ui-screens (advisory)
     runs-on: ubuntu-latest
@@ -46,6 +77,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install web dependencies (axe-core)
+        run: npm ci
+        working-directory: web
       - name: Install
         run: |
           python -m pip install --upgrade pip

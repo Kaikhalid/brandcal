@@ -2,8 +2,10 @@
 
 Binds to 127.0.0.1 only. Every endpoint calls ``actions`` and returns the CLI's JSON; the
 server adds only the HTTP frame: identity, origin and CSRF checks, status codes and headers.
-The web views in ``brandcal/web/`` are served from a fixed allow-list; any other non-/api GET
-is 404. An unexpected exception is a JSON 500 (code INTERNAL) with no detail.
+The Next.js UI built into ``brandcal/web_next/`` is served at ``/`` (files under that folder
+only, with safe path handling and a per-page Content-Security-Policy from ``csp.json``). The
+first web views in ``brandcal/web/`` live on at ``/mvp/``, from a fixed allow-list; any other
+non-/api GET is 404. An unexpected exception is a JSON 500 (code INTERNAL) with no detail.
 """
 
 from __future__ import annotations
@@ -12,6 +14,7 @@ import hashlib
 import hmac
 import json
 import mimetypes
+import re
 import secrets
 import sqlite3
 import sys
@@ -31,16 +34,35 @@ from brandcal.errors import EXIT_CODES, BrandcalError, ErrorCode
 from brandcal.identity import Verifier
 
 HOST = "127.0.0.1"
-WEB = Path(__file__).parent / "web"
-# URL path -> (file in WEB, content type): the only static files that are ever served.
+WEB = Path(__file__).parent / "web"  # the first (vanilla JS) views, now at /mvp/
+WEB_NEXT = Path(__file__).parent / "web_next"  # the built Next.js UI, served at /
+HTML = "text/html; charset=utf-8"
+MVP_ROOT = "/mvp/"
+# URL path -> (file in WEB, content type): the only MVP files that are ever served.
 PAGES = {
-    "/": ("index.html", "text/html; charset=utf-8"),
-    "/index.html": ("index.html", "text/html; charset=utf-8"),
-    "/app.css": ("app.css", "text/css; charset=utf-8"),
-    "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-    "/theme.js": ("theme.js", "text/javascript; charset=utf-8"),
-    "/icons.svg": ("icons.svg", "image/svg+xml"),
+    MVP_ROOT: ("index.html", HTML),
+    "/mvp/index.html": ("index.html", HTML),
+    "/mvp/app.css": ("app.css", "text/css; charset=utf-8"),
+    "/mvp/app.js": ("app.js", "text/javascript; charset=utf-8"),
+    "/mvp/theme.js": ("theme.js", "text/javascript; charset=utf-8"),
+    "/mvp/icons.svg": ("icons.svg", "image/svg+xml"),
 }
+# File extension -> content type for web_next. Anything else is never served.
+STATIC_TYPES = {
+    ".html": HTML,
+    ".js": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".woff2": "font/woff2",
+    ".txt": "text/x-component",  # Next's RSC payloads; the client insists on this type
+    ".svg": "image/svg+xml",
+    ".ico": "image/x-icon",
+    ".png": "image/png",
+    ".json": "application/json",
+}
+CSP_FILE = "csp.json"  # written by web/scripts/postbuild.mjs: page -> hashes of its inline code
+DEFAULT_CSP = "default-src 'self'"
+_HASH = re.compile(r"sha256-[A-Za-z0-9+/_-]+={0,2}")
+_ESCAPED = re.compile(r"%(?:2e|2f|5c|00)", re.IGNORECASE)  # dot, slash, backslash, NUL
 EXIT_INTERNAL = int(EXIT_CODES[ErrorCode.INTERNAL])
 BODY_LIMIT = 256 * 1024
 DEV_SOURCE = "dev-unverified"
@@ -75,7 +97,12 @@ class App:
     """Settings and per-process secrets shared by all requests."""
 
     def __init__(
-        self, base: Path, cfg: Mapping[str, Any], verifier: Verifier | None, dev: bool
+        self,
+        base: Path,
+        cfg: Mapping[str, Any],
+        verifier: Verifier | None,
+        dev: bool,
+        static_root: Path | None = None,
     ) -> None:
         if dev == (verifier is not None):
             raise ValueError("give a verifier, or dev=True, not both and not neither")
@@ -83,6 +110,8 @@ class App:
         serve: dict[str, Any] = block if isinstance(block, dict) else {}
         self.base, self.cfg, self.serve = base, cfg, serve
         self.verifier, self.dev = verifier, dev
+        self.static_base = (static_root or WEB_NEXT).resolve()
+        self.csp = load_csp(self.static_base)  # read once; restart to pick up a new build
         self.origins: list[str] = [str(o) for o in serve.get("allowed_origins") or []]
         self.hosts = {urlsplit(o).netloc for o in self.origins}
         self._secret = secrets.token_bytes(32)
@@ -104,6 +133,77 @@ class App:
 class _Server(ThreadingHTTPServer):
     app: App
     daemon_threads = True
+
+
+def _digests(hashes: Mapping[str, Any], key: str) -> list[str]:
+    values = hashes.get(key)
+    items = values if isinstance(values, list) else []
+    return [f"'{v}'" for v in items if isinstance(v, str) and _HASH.fullmatch(v)]
+
+
+def load_csp(root: Path) -> dict[str, str]:
+    """The Content-Security-Policy of each built HTML page, from ``csp.json``.
+
+    The policy stays ``default-src 'self'`` plus the sha256 of that page's own inline scripts
+    and styles. 'unsafe-hashes' is added only when a style="" attribute needs it, and neither
+    'unsafe-inline' nor 'unsafe-eval' is ever sent. No file, or a broken one, means no entries:
+    every page then gets the plain policy.
+    """
+    try:
+        data = json.loads((root / CSP_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    out: dict[str, str] = {}
+    for page, hashes in data.items() if isinstance(data, dict) else []:
+        if not isinstance(hashes, dict):
+            continue
+        parts = [DEFAULT_CSP]
+        scripts = _digests(hashes, "script")
+        if scripts:
+            parts.append("script-src 'self' " + " ".join(scripts))
+        styles, attrs = _digests(hashes, "style"), _digests(hashes, "style_attr")
+        if styles or attrs:
+            unsafe = " 'unsafe-hashes'" if attrs else ""
+            parts.append(f"style-src 'self'{unsafe} " + " ".join(styles + attrs))
+        out[str(page)] = "; ".join(parts)
+    return out
+
+
+def static_target(base: Path, raw: str) -> Path | str | None:
+    """Map a URL path to a file under ``base`` (already resolved), or None if it is not served.
+
+    A str result is the folder URL to redirect to (``/x`` -> ``/x/``). Refused: encoded dots,
+    slashes, backslashes and NULs, control characters, ``.``/``..``/dotfile segments, empty
+    segments, anything that resolves (through symlinks) outside ``base``, the csp manifest, and
+    any file type not in STATIC_TYPES.
+    """
+    if not raw.startswith("/") or "\\" in raw or _ESCAPED.search(raw):
+        return None
+    path = unquote(raw)
+    if any(ord(c) < 0x20 or c in "\x7f\\" for c in path):
+        return None
+    parts = path.split("/")[1:]
+    folder = parts[-1] == ""
+    parts = parts[:-1] if folder else parts
+    if any(not p or p.startswith(".") for p in parts):
+        return None
+    try:
+        target = base.joinpath(*parts).resolve()
+        if not target.is_relative_to(base):
+            return None
+        if target.is_dir():
+            if not (target / "index.html").is_file():
+                return None
+            if not folder and parts:
+                return raw + "/"
+            target = (target / "index.html").resolve()
+        elif folder or not target.is_file():
+            return None
+        rel = target.relative_to(base)
+    except (OSError, ValueError):
+        return None
+    hidden = rel.as_posix() == CSP_FILE or any(p.startswith(".") for p in rel.parts)
+    return None if hidden or target.suffix.lower() not in STATIC_TYPES else target
 
 
 def _refusal(code: ErrorCode, message: str, next_step: str) -> BrandcalError:
@@ -246,15 +346,25 @@ class _Handler(BaseHTTPRequestHandler):
 
     # -- frame ----------------------------------------------------------------------------
 
-    def _send(self, status: int, payload: bytes, ctype: str, exit_code: int = 0) -> None:
+    def _send(
+        self,
+        status: int,
+        payload: bytes,
+        ctype: str,
+        exit_code: int = 0,
+        csp: str = DEFAULT_CSP,
+        location: str | None = None,
+    ) -> None:
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("X-Brandcal-Exit", str(exit_code))
-        self.send_header("Content-Security-Policy", "default-src 'self'")
+        self.send_header("Content-Security-Policy", csp)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Cache-Control", "no-store")
+        if location is not None:
+            self.send_header("Location", location)
         if status == 405:
             self.send_header("Allow", ALLOWED_METHODS)
         self.end_headers()
@@ -298,16 +408,21 @@ class _Handler(BaseHTTPRequestHandler):
     def _serve(self) -> None:
         extra: Body = {}
         try:
-            url = urlsplit(self.path)
-            if self.command == "GET" and url.path in PAGES:
-                return self._page(*PAGES[url.path])
-            parts = [unquote(p) for p in url.path.split("/")[1:]]
+            # Not urlsplit: it reads "//x/" as a host. The path is everything before the "?".
+            path, _, query = self.path.partition("?")
+            if self.command == "GET" and path in PAGES:
+                return self._page(*PAGES[path])
+            if self.command == "GET" and path == MVP_ROOT.rstrip("/"):
+                return self._redirect(MVP_ROOT, query)
+            parts = [unquote(p) for p in path.split("/")[1:]]
+            if self.command == "GET" and (not parts or parts[0] != "api"):
+                return self._static(path, query)
             if len(parts) < 2 or parts[0] != "api":
                 raise _not_found("page")
             body = self._read_body() if self.command == "POST" else b""
             session = self.server.app.session(self.headers.get("Cf-Access-Jwt-Assertion"))
             if self.command == "GET":
-                self._get(parts[1:], url.query, session)
+                self._get(parts[1:], query, session)
             else:
                 self._post(parts[1:], session, body, extra)
         except BrandcalError as err:
@@ -322,6 +437,21 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _page(self, name: str, ctype: str) -> None:
         self._send(200, (WEB / name).read_bytes(), ctype)
+
+    def _redirect(self, location: str, query: str) -> None:
+        target = f"{location}?{query}" if query else location
+        self._send(308, b"", "text/plain; charset=utf-8", location=target)
+
+    def _static(self, path: str, query: str) -> None:
+        """A file of the Next.js build; the query string is ignored for the lookup."""
+        app = self.server.app
+        target = static_target(app.static_base, path)
+        if target is None:
+            raise _not_found("page")
+        if isinstance(target, str):
+            return self._redirect(target, query)
+        csp = app.csp.get(target.relative_to(app.static_base).as_posix(), DEFAULT_CSP)
+        self._send(200, target.read_bytes(), STATIC_TYPES[target.suffix.lower()], csp=csp)
 
     def _read_body(self) -> bytes:
         length = self.headers.get("Content-Length", "")
@@ -453,12 +583,21 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 def make_server(
-    base: Path, cfg: Mapping[str, Any], port: int, verifier: Verifier | None, *, dev: bool = False
+    base: Path,
+    cfg: Mapping[str, Any],
+    port: int,
+    verifier: Verifier | None,
+    *,
+    dev: bool = False,
+    static_root: Path | None = None,
 ) -> ThreadingHTTPServer:
-    """A server bound to 127.0.0.1 (never anything else). ``verifier`` is None only in dev mode."""
+    """A server bound to 127.0.0.1 (never anything else). ``verifier`` is None only in dev mode.
+
+    ``static_root`` replaces the packaged ``web_next/`` folder (tests only).
+    """
     server = _Server((HOST, port), _Handler)
     try:
-        server.app = App(base, cfg, verifier, dev)
+        server.app = App(base, cfg, verifier, dev, static_root)
     except ValueError:
         server.server_close()
         raise
