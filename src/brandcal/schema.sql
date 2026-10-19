@@ -81,14 +81,18 @@ CREATE TABLE IF NOT EXISTS approvals (
   content_version INTEGER NOT NULL, content_hash TEXT NOT NULL,
   window TEXT NOT NULL,
   decided_by  TEXT NOT NULL REFERENCES agents(id),
-  channel     TEXT NOT NULL CHECK (channel IN ('card','writer-session','legacy')),
+  channel     TEXT NOT NULL CHECK (channel IN ('card','writer-session','legacy','console')),
   relayed_by  TEXT NOT NULL REFERENCES agents(id),
   recorded_by TEXT NOT NULL REFERENCES agents(id),
   source_message_id TEXT NOT NULL,
   approver_words TEXT NOT NULL,
   changes_requested TEXT,
   decided_at TEXT NOT NULL,
-  signature TEXT
+  signature TEXT,
+  verified_identity TEXT,
+  identity_source TEXT,
+  CHECK (channel <> 'console' OR (length(verified_identity) > 0 AND identity_source IS NOT NULL)),
+  CHECK (identity_source IS NULL OR identity_source = 'access-jwt')
 );
 
 CREATE TABLE IF NOT EXISTS events (
@@ -415,8 +419,18 @@ BEGIN
   SELECT RAISE(ABORT, 'ROLE_NOT_ALLOWED: decided_by must be an approver')
     WHERE NOT EXISTS (SELECT 1 FROM agents WHERE id = NEW.decided_by AND role = 'approver');
   SELECT RAISE(ABORT, 'ROLE_NOT_ALLOWED: relayed_by must be a manager or writer')
-    WHERE NOT EXISTS (SELECT 1 FROM agents
+    WHERE NEW.channel <> 'console' AND NOT EXISTS (SELECT 1 FROM agents
                       WHERE id = NEW.relayed_by AND role IN ('manager','writer'));
   SELECT RAISE(ABORT, 'ROLE_NOT_ALLOWED: recorded_by must be a manager')
-    WHERE NOT EXISTS (SELECT 1 FROM agents WHERE id = NEW.recorded_by AND role = 'manager');
+    WHERE NEW.channel <> 'console'
+      AND NOT EXISTS (SELECT 1 FROM agents WHERE id = NEW.recorded_by AND role = 'manager');
+  SELECT RAISE(ABORT, 'ROLE_NOT_ALLOWED: a console approval is relayed by the console agent')
+    WHERE NEW.channel = 'console'
+      AND NOT EXISTS (SELECT 1 FROM agents WHERE id = NEW.relayed_by AND role = 'system');
+  SELECT RAISE(ABORT, 'ROLE_NOT_ALLOWED: a console approval is recorded by the console agent')
+    WHERE NEW.channel = 'console'
+      AND NOT EXISTS (SELECT 1 FROM agents WHERE id = NEW.recorded_by AND role = 'system');
 END;
+
+-- Schema version (migrations.LATEST). Existing databases are migrated before this runs.
+PRAGMA user_version = 2;

@@ -13,6 +13,7 @@ from pathlib import Path
 
 from brandcal.errors import BrandcalError, ErrorCode
 from brandcal.events import row_hash
+from brandcal.migrations import migrate
 from brandcal.timefmt import format_time
 from brandcal.transitions import TRANSITIONS
 
@@ -28,6 +29,7 @@ def open_db(path: Path, tz: tzinfo) -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout = 5000")
     conn.create_function("bc_now", 0, lambda: format_time(datetime.now(tz)), deterministic=False)
     conn.create_function("bc_row_hash", 10, row_hash, deterministic=True)
+    migrate(conn)
     return conn
 
 

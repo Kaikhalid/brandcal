@@ -110,6 +110,21 @@ class ErrorCode(StrEnum):
     ARCHIVED = "ARCHIVED"
     """The post was moved to a monthly archive file; read it with archive show."""
 
+    IDENTITY_UNVERIFIED = "IDENTITY_UNVERIFIED"
+    """No verified identity (Access JWT) backs this decision; the CLI and dev mode cannot decide."""
+
+    IDENTITY_UNMAPPED = "IDENTITY_UNMAPPED"
+    """The identity is verified but is not listed as an approver or viewer in serve.approvers."""
+
+    BAD_ORIGIN = "BAD_ORIGIN"
+    """A write came from an origin or host that serve.allowed_origins does not list."""
+
+    REASON_REQUIRED = "REASON_REQUIRED"
+    """Request changes needs what, where and instruction, all non-empty."""
+
+    EXTRA_NOT_INSTALLED = "EXTRA_NOT_INSTALLED"
+    """An optional extra this feature needs (cryptography for Access JWTs) is not installed."""
+
 
 EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.TIME_OFFSET_REQUIRED: ExitCode.VALIDATION,
@@ -140,6 +155,11 @@ EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.CLAIMED: ExitCode.CONFLICT,
     ErrorCode.URL_CONFLICT: ExitCode.CONFLICT,
     ErrorCode.ARCHIVED: ExitCode.NOT_FOUND,
+    ErrorCode.IDENTITY_UNVERIFIED: ExitCode.NOT_ALLOWED,
+    ErrorCode.IDENTITY_UNMAPPED: ExitCode.NOT_ALLOWED,
+    ErrorCode.BAD_ORIGIN: ExitCode.NOT_ALLOWED,
+    ErrorCode.REASON_REQUIRED: ExitCode.VALIDATION,
+    ErrorCode.EXTRA_NOT_INSTALLED: ExitCode.USAGE,
 }
 """Exit code for each error code. TODO: add the remaining codes as commands land."""
 

@@ -9,6 +9,7 @@ Exit 0 is success and exit 1 is never used deliberately (it means an unexpected 
 | Exit | Code | Meaning |
 |---|---|---|
 | 2 | `BAD_ARGS` | The command line could not be understood. |
+| 2 | `EXTRA_NOT_INSTALLED` | An optional extra this feature needs (cryptography for Access JWTs) is not installed. |
 | 2 | `HOME_NOT_CONFIGURED` | No data directory is configured (BRANDCAL_HOME or --home). |
 | 2 | `NO_AGENT` | No acting agent given (--as or BRANDCAL_AGENT), or the agent is unknown. |
 | 2 | `TZ_NOT_CONFIGURED` | No display timezone is configured (config.json "timezone" or BRANDCAL_TZ). |
@@ -17,9 +18,13 @@ Exit 0 is success and exit 1 is never used deliberately (it means an unexpected 
 | 3 | `INVALID_POST` | The post's structure breaks a rule (part count, target URL, article title or body). |
 | 3 | `MEDIA_INVALID` | A media file failed its checks (type, size, alt text, count). |
 | 3 | `ON_HOLD` | The post has a hold that has not been cleared. |
+| 3 | `REASON_REQUIRED` | Request changes needs what, where and instruction, all non-empty. |
 | 3 | `TIME_OFFSET_REQUIRED` | A timestamp was given without an explicit UTC offset. |
 | 3 | `TOO_LONG` | A part's text is over the platform's character limit. |
+| 4 | `BAD_ORIGIN` | A write came from an origin or host that serve.allowed_origins does not list. |
 | 4 | `COMMENT_NOT_DELEGATED` | Agents never post comments unless a human has delegated that exact comment. |
+| 4 | `IDENTITY_UNMAPPED` | The identity is verified but is not listed as an approver or viewer in serve.approvers. |
+| 4 | `IDENTITY_UNVERIFIED` | No verified identity (Access JWT) backs this decision; the CLI and dev mode cannot decide. |
 | 4 | `ROLE_NOT_ALLOWED` | The acting agent's role may not do this. |
 | 5 | `APPEND_ONLY` | Events and approvals are never changed, and deleted only by an archive run. |
 | 5 | `BAD_TRANSITION` | This status change is not in the state machine (SPEC 6.1). |
