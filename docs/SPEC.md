@@ -26,6 +26,7 @@ that every step leaves a record.
   near-final.
 - The tool never posts to any platform itself and holds no platform credentials. The
   manager publishes by whatever means it has and records the result.
+- A web UI (v0.2, proposed) is a second front end to the same core: see [UI_SPEC.md](UI_SPEC.md).
 
 ---
 
@@ -480,6 +481,9 @@ sequenceDiagram
    file; unsigned approvals once signing is enabled.
 7. The manager should regularly compare the live accounts (posts and comments) with the
    calendar and report anything not in it.
+
+Proposed amendment: a `console` channel, where the server records a verified human's decision
+(rules 2 and 3 differ), is specified in [UI_SPEC.md](UI_SPEC.md) section 3.
 
 ### 7.4 Rules for agents
 
