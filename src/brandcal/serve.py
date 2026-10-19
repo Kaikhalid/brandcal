@@ -46,7 +46,7 @@ BODY_LIMIT = 256 * 1024
 DEV_SOURCE = "dev-unverified"
 ALLOWED_METHODS = "GET, POST"
 # Exit code -> HTTP status (UI_SPEC 1.3); IDENTITY_UNVERIFIED is 401.
-STATUS = {2: 400, 3: 422, 4: 403, 5: 409, 6: 409, 7: 404, 8: 409}
+STATUS = {2: 400, 3: 422, 4: 403, 5: 409, 6: 409, 7: 404, 8: 409, 9: 500}
 _KIND_TYPE = {
     "image": "image/png",
     "gif": "image/gif",

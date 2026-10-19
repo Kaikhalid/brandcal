@@ -54,7 +54,8 @@ outside the repository) before running the privacy scan.
 - Every write needs `--as NAME` (or `BRANDCAL_AGENT`) naming an agent in the config.
 - Output is one line of JSON. Read `ok`, and on errors `error.code` and `error.next`.
   Exit codes: 0 ok, 2 usage or config, 3 validation, 4 not allowed, 5 wrong state,
-  6 approval or hash mismatch, 7 not found, 8 conflict. Full list: [docs/ERRORS.md](docs/ERRORS.md).
+  6 approval or hash mismatch, 7 not found, 8 conflict, 9 internal error.
+  Full list: [docs/ERRORS.md](docs/ERRORS.md).
 - Every time carries an explicit UTC offset (`2026-03-02T09:00:00+00:00`).
 - Run `brandcal help CMD` for one command's arguments, roles and errors.
 
