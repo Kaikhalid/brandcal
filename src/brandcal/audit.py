@@ -154,13 +154,30 @@ def _archive_flags(conn: sqlite3.Connection, home: Path) -> tuple[list[dict[str,
     return flags, len(rows)
 
 
+def _console_flags(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Every console approval needs a verified identity from an Access JWT (UI_SPEC 3.2)."""
+    flags: list[dict[str, Any]] = []
+    rows = conn.execute(
+        "SELECT id, post_id, verified_identity, identity_source FROM approvals"
+        " WHERE channel = 'console' ORDER BY id"
+    ).fetchall()
+    for r in rows:
+        if not r["verified_identity"] or r["identity_source"] != "access-jwt":
+            detail = "console approval without a verified identity from an Access JWT"
+            flags.append(
+                {"kind": "console_unverified", "post": r["post_id"], "approval": r["id"],
+                 "detail": detail}
+            )  # fmt: skip
+    return flags
+
+
 def audit(conn: sqlite3.Connection, home: Path) -> dict[str, Any]:
     """Check the whole database without writing anything; the caller reads ``ok`` and ``flags``."""
     chain_problems, chains, events = chain_flags(conn)
     published_flags, published = _published_flags(conn)
     media_flags, media_count = _media_flags(conn, home)
     archive_flags, archives = _archive_flags(conn, home)
-    flags = chain_problems + published_flags + media_flags + archive_flags
+    flags = chain_problems + published_flags + media_flags + archive_flags + _console_flags(conn)
     return {
         "ok": not flags,
         "flags": flags,

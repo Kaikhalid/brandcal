@@ -170,6 +170,7 @@ client-supplied names.
 | 4 | `IDENTITY_UNMAPPED` | The identity is verified but not listed as an approver or viewer. `next`: ask the admin to add it to `serve.approvers`. |
 | 4 | `BAD_ORIGIN` | A write came from an origin or host that is not allowed (2.7). |
 | 3 | `REASON_REQUIRED` | Request changes needs `what`, `where` and `instruction` (4.2). |
+| 2 | `EXTRA_NOT_INSTALLED` | An optional extra this feature needs (2.4) is not installed. Raised by `serve` (U1b). |
 
 ### 2.4 JWT signature check
 
@@ -258,17 +259,22 @@ made by the verified approver in the UI. Each such approval records:
 
 `approvals.channel` is `CHECK (channel IN ('card','writer-session','legacy'))`. U1 adds
 migration `0002` (SQLite needs a table rebuild to change a CHECK; the migration must keep
-rows, ids and the triggers, and be tested on a populated database):
+rows, ids and the triggers, and be tested on a populated database). There was no migration
+framework, so U1a adds `brandcal/migrations.py`: the version lives in `PRAGMA user_version`
+(a database without one that has an `approvals` table is version 1), `open_db` applies pending
+migrations, and `schema.sql` stays the source for fresh databases and stamps the latest version:
 
 - channel CHECK becomes `('card','writer-session','legacy','console')`;
 - new columns `verified_identity TEXT` and `identity_source TEXT`, both required when
   channel is `console`, and CHECKed to `access-jwt` (never
   `dev-unverified`);
 - the existing triggers that require `recorded_by` and `relayed_by` to be a manager or writer
-  are relaxed **only for channel `console`**: both must be the configured `console` agent
-  (role `system`), and `decided_by` must still have role `approver`;
-- `audit` gains a check: every console approval has a verified identity and source, and an
-  `approve` decision on a published post still matches its hash.
+  are relaxed **only for channel `console`**: both must have role `system`, and `decided_by`
+  must still have role `approver`. A trigger cannot read `config.json`, so that both are the
+  *configured* `serve.console_agent` is enforced in code (`approvals.py`), not by the trigger;
+- `audit` gains a check: every console approval has a verified identity and source
+  (`console_unverified`); an `approve` decision on a published post matching its hash is the
+  existing `published_unapproved` and `content_changed` check.
 
 ### 3.3 Stale views
 
@@ -301,7 +307,7 @@ not signed: the Access identity is the proof, and signing stays with T15 (decisi
 | Existing rule | Resolution |
 |---|---|
 | "Only the manager records decisions" (SPEC 7.3.2, 7.4) | Kept for `card` and `writer-session`. For `console` the server records on a verified human's behalf (3.4). Update SPEC 7.3 by cross-reference only |
-| The approver role has no commands (AGENTS.md) | The CLI still has none: `approver` stays `ROLE_NOT_ALLOWED` on every CLI command. The approver's actions exist only through `serve` with a verified identity, using the same core functions. Role lists in `transitions` gain `approver` for the rows the UI can perform |
+| The approver role has no commands (AGENTS.md) | The CLI still has none: `approver` stays `ROLE_NOT_ALLOWED` on every CLI command. The approver's actions exist only through `serve` with a verified identity, using the same core functions. Role lists in `transitions` gain `approver` for the rows the UI can perform (deferred to U3: U1a leaves the table alone, and a console cancel is checked against the manager row because the transition roles name who records a decision) |
 | Self-declared `--as NAME` | Unchanged for the CLI. The UI never uses it; dev mode is read-only (2.5) |
 | System role never approves (SPEC 6.1) | The `console` agent has role `system` but only records; the deciding actor is the approver and the trigger enforces it (3.2) |
 | Edits belong to writer and manager | Agents still edit through the CLI only. Only the human approver edits in the UI (4.1, decision 3); the CLI `edit` still refuses the approver role |
@@ -477,9 +483,14 @@ Four tasks, each small enough for one session. Tests are written first.
 
 ### U1. Action layer and JSON API
 
-Files: `src/brandcal/actions.py` (new), `src/brandcal/cli.py`, `src/brandcal/serve.py` (new),
-`src/brandcal/errors.py`, `src/brandcal/schema.sql` and a migration, `docs/ERRORS.md`
-(regenerated), `tests/test_actions.py`, `tests/test_serve_api.py`.
+U1 is split in two sessions. **U1a (core)** is items 1 to 4, 7 and 10: `src/brandcal/actions.py`
+(new), `migrations.py` (new), `cli.py`, `approvals.py`, `publish.py`, `audit.py`, `reports.py`,
+`errors.py`, `schema.sql`, `docs/ERRORS.md` (regenerated), `tests/test_actions.py`,
+`tests/test_migrate_0002.py`, `tests/test_events_cmd.py`, `tests/test_console.py`. Console
+decisions are driven through `actions` with a verified `Identity`; the CLI cannot record
+them. **U1b (serve and identity)** is items 5, 6, 8 and 9: `src/brandcal/serve.py` (new),
+`tests/test_serve_api.py`; it also raises `IDENTITY_UNMAPPED`, `BAD_ORIGIN` and
+`EXTRA_NOT_INSTALLED`, which U1a only defines.
 
 1. CLI handlers move to `actions.py` with no behaviour change; the existing suite passes.
 2. `brandcal events` exists with `--since`, `--post`, `--actor`, `--limit`, and `help events`.

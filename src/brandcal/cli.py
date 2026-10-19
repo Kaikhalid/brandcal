@@ -15,9 +15,9 @@ from typing import Any, NoReturn
 
 from brandcal import (
     __version__,
+    actions,
     approvals,
     archive,
-    audit,
     backup,
     migrate_v1,
     posts,
@@ -27,22 +27,9 @@ from brandcal import (
     timefmt,
 )
 from brandcal import config as cfgmod
+from brandcal.actions import POST_TYPES, TIME_FORMAT, Identity  # noqa: F401
 from brandcal.db import init_db, open_db
-from brandcal.errors import EXIT_CODES, BrandcalError, ErrorCode
-from brandcal.transitions import CLOSED, STATES, TRANSITIONS
-
-# Must match the posts.post_type CHECK in schema.sql (SPEC 5.3); test_cli_frame checks this.
-POST_TYPES: tuple[str, ...] = (
-    "text",
-    "image",
-    "carousel",
-    "thread",
-    "article",
-    "reshare",
-    "video",
-    "comment",
-)
-TIME_FORMAT = "ISO 8601 with an explicit UTC offset, e.g. 2026-03-02T09:00:00+00:00"
+from brandcal.errors import BrandcalError, ErrorCode
 
 # name -> (arguments, roles, error codes). Static; extended as commands land (SPEC 8.1).
 _W = ["writer", "manager"]
@@ -60,6 +47,11 @@ COMMANDS: dict[str, tuple[str, list[str], list[str]]] = {
         ["BAD_TIME"],
     ),
     "show": ("ID [--log]", _ALL, _E_ID),
+    "events": (
+        "[--since ID] [--post ID] [--actor NAME] [--limit N]",
+        _ALL,
+        ["BAD_ARGS", "NOT_FOUND", "ARCHIVED"],
+    ),
     "add": (
         "(JSON on stdin) [--approver-confirmed MSG --words TEXT]",
         _W,
@@ -86,12 +78,16 @@ COMMANDS: dict[str, tuple[str, list[str], list[str]]] = {
         "ID --version N --hash H --channel card|writer-session --msg MSG --words TEXT"
         " [--relayed-by NAME] [--approver NAME]",
         ["manager"],
-        _E_ID + ["BAD_TRANSITION", "ROLE_NOT_ALLOWED", "STALE_APPROVAL", "ON_HOLD", "BAD_ARGS"],
+        _E_ID
+        + ["BAD_TRANSITION", "ROLE_NOT_ALLOWED", "STALE_APPROVAL", "ON_HOLD", "BAD_ARGS"]
+        + ["IDENTITY_UNVERIFIED"],
     ),
     "request-changes": (
-        "ID --version N --hash H --msg MSG --words TEXT [--approver NAME]",
+        "ID --version N --hash H --msg MSG --words TEXT [--approver NAME]"
+        " [--what TEXT --where TEXT --instruction TEXT]",
         ["manager"],
-        _E_ID + ["BAD_TRANSITION", "ROLE_NOT_ALLOWED", "STALE_APPROVAL", "BAD_ARGS"],
+        _E_ID
+        + ["BAD_TRANSITION", "ROLE_NOT_ALLOWED", "STALE_APPROVAL", "BAD_ARGS", "REASON_REQUIRED"],
     ),
     "reschedule": (
         "ID --version N --hash H --window W --msg MSG --words TEXT [--approver NAME]",
@@ -211,6 +207,9 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--approver")
         if name == "approve":
             p.add_argument("--relayed-by")
+        if name == "request-changes":
+            for field in ("what", "where", "instruction"):
+                p.add_argument(f"--{field}")
     cancel_p = sub.add_parser("cancel", parents=[common], add_help=False)
     cancel_p.add_argument("id")
     cancel_p.add_argument("--kind", required=True)
@@ -246,6 +245,11 @@ def build_parser() -> argparse.ArgumentParser:
     show_p = sub.add_parser("show", parents=[common], add_help=False)
     show_p.add_argument("id")
     show_p.add_argument("--log", action="store_true")
+    events_p = sub.add_parser("events", parents=[common], add_help=False)
+    events_p.add_argument("--since", type=int)
+    events_p.add_argument("--post")
+    events_p.add_argument("--actor")
+    events_p.add_argument("--limit", type=int, default=actions.EVENTS_LIMIT)
     report_p = sub.add_parser("report", parents=[common], add_help=False)
     report_sub = report_p.add_subparsers(dest="report_cmd", parser_class=_Parser, required=True)
     report_sub.add_parser("weekly", parents=[common], add_help=False).add_argument("--end")
@@ -308,15 +312,7 @@ def cmd_help(args: argparse.Namespace) -> dict[str, object]:
 
 
 def cmd_schema(args: argparse.Namespace) -> dict[str, object]:
-    return {
-        "ok": True,
-        "states": list(STATES),
-        "closed_states": sorted(CLOSED),
-        "transitions": [{"from": f, "to": t, "roles": list(r)} for f, t, r in TRANSITIONS],
-        "post_types": list(POST_TYPES),
-        "time_format": TIME_FORMAT,
-        "exit_codes": {c.value: int(e) for c, e in EXIT_CODES.items()},
-    }
+    return actions.schema()
 
 
 def cmd_init(args: argparse.Namespace) -> dict[str, object]:
@@ -387,10 +383,7 @@ def cmd_add(args: argparse.Namespace) -> dict[str, object]:
 
 def cmd_edit(args: argparse.Namespace) -> dict[str, object]:
     with _session(args) as s:
-        out: dict[str, object] = posts.edit_post(
-            s.conn, s.who, s.role, s.cfg, args.id, args.assignments
-        )
-        return out
+        return actions.edit(s.conn, s.cfg, Identity(s.who), args.id, args.assignments)
 
 
 def cmd_part(args: argparse.Namespace) -> dict[str, object]:
@@ -429,8 +422,7 @@ def cmd_media(args: argparse.Namespace) -> dict[str, object]:
 
 def cmd_note(args: argparse.Namespace) -> dict[str, object]:
     with _session(args) as s:
-        out: dict[str, object] = posts.add_note(s.conn, s.who, s.cfg, args.id, args.text)
-        return out
+        return actions.note(s.conn, s.cfg, Identity(s.who), args.id, args.text)
 
 
 def cmd_keywords(args: argparse.Namespace) -> dict[str, object]:
@@ -441,14 +433,12 @@ def cmd_keywords(args: argparse.Namespace) -> dict[str, object]:
 
 def cmd_check(args: argparse.Namespace) -> dict[str, object]:
     with _session(args, write=False) as s:
-        out: dict[str, object] = posts.check_post(s.conn, s.cfg, args.id)
-        return out
+        return actions.check(s.conn, s.cfg, args.id)
 
 
 def cmd_submit(args: argparse.Namespace) -> dict[str, object]:
     with _session(args) as s:
-        out: dict[str, object] = posts.submit_post(s.conn, s.who, s.role, s.cfg, args.id)
-        return out
+        return actions.submit(s.conn, s.cfg, Identity(s.who), args.id)
 
 
 def cmd_preview(args: argparse.Namespace) -> dict[str, object]:
@@ -458,39 +448,36 @@ def cmd_preview(args: argparse.Namespace) -> dict[str, object]:
 
 
 def cmd_approve(args: argparse.Namespace) -> dict[str, object]:
+    # No verified identity here, so channel console is refused (IDENTITY_UNVERIFIED).
     with _session(args) as s:
-        out: dict[str, object] = approvals.approve(
-            s.conn, s.who, s.role, s.cfg, args.id, args.version, args.hash, args.channel,
+        return actions.approve(
+            s.conn, s.cfg, Identity(s.who), args.id, args.version, args.hash, args.channel,
             args.msg, args.words, args.relayed_by, args.approver,
         )  # fmt: skip
-        return out
 
 
 def cmd_request_changes(args: argparse.Namespace) -> dict[str, object]:
     with _session(args) as s:
-        out: dict[str, object] = approvals.request_changes(
-            s.conn, s.who, s.role, s.cfg, args.id, args.version, args.hash, args.msg, args.words,
-            args.approver,
+        return actions.request_changes(
+            s.conn, s.cfg, Identity(s.who), args.id, args.version, args.hash, args.msg, args.words,
+            args.approver, what=args.what, where=args.where, instruction=args.instruction,
         )  # fmt: skip
-        return out
 
 
 def cmd_reschedule(args: argparse.Namespace) -> dict[str, object]:
     with _session(args) as s:
-        out: dict[str, object] = approvals.reschedule(
-            s.conn, s.who, s.role, s.cfg, args.id, args.version, args.hash, args.window,
+        return actions.reschedule(
+            s.conn, s.cfg, Identity(s.who), args.id, args.version, args.hash, args.window,
             args.msg, args.words, args.approver,
         )  # fmt: skip
-        return out
 
 
 def cmd_cancel(args: argparse.Namespace) -> dict[str, object]:
     with _session(args) as s:
-        out: dict[str, object] = approvals.cancel(
-            s.conn, s.who, s.role, s.cfg, args.id, args.kind, args.reason, args.msg, args.words,
+        return actions.cancel(
+            s.conn, s.cfg, Identity(s.who), args.id, args.kind, args.reason, args.msg, args.words,
             args.approver,
         )  # fmt: skip
-        return out
 
 
 def cmd_schedule(args: argparse.Namespace) -> dict[str, object]:
@@ -545,8 +532,7 @@ def cmd_sweep(args: argparse.Namespace) -> dict[str, object]:
 def cmd_audit(args: argparse.Namespace) -> dict[str, object]:
     """Read-only; exits 0 even with flags, the caller reads ok and flags."""
     with _session(args, write=False) as s:
-        out: dict[str, object] = audit.audit(s.conn, s.base)
-        return out
+        return actions.audit(s.conn, s.base)
 
 
 def cmd_next(args: argparse.Namespace) -> dict[str, object]:
@@ -559,22 +545,25 @@ def cmd_next(args: argparse.Namespace) -> dict[str, object]:
 
 def cmd_today(args: argparse.Namespace) -> dict[str, object]:
     with _session(args, write=False) as s:
-        return {"ok": True, "items": reports.day(s.conn, s.cfg, args.command)}
+        return actions.today(s.conn, s.cfg, args.command)
 
 
 def cmd_list(args: argparse.Namespace) -> dict[str, object]:
     with _session(args, write=False) as s:
-        rows = reports.list_posts(
-            s.conn, s.cfg, args.status, args.date_from, args.date_to, args.platform, args.closed,
-            args.with_archive, s.base,
+        return actions.list_posts(
+            s.conn, s.cfg, s.base, args.status, args.date_from, args.date_to, args.platform,
+            args.closed, args.with_archive,
         )  # fmt: skip
-        return {"ok": True, "posts": rows}
 
 
 def cmd_show(args: argparse.Namespace) -> dict[str, object]:
     with _session(args, write=False) as s:
-        out: dict[str, object] = reports.show(s.conn, args.id, args.log)
-        return out
+        return actions.show(s.conn, args.id, args.log)
+
+
+def cmd_events(args: argparse.Namespace) -> dict[str, object]:
+    with _session(args, write=False) as s:
+        return actions.events(s.conn, args.since, args.post, args.actor, args.limit)
 
 
 def _manager_only(args: argparse.Namespace, cfg: dict[str, Any]) -> None:
@@ -633,13 +622,13 @@ def cmd_archive(args: argparse.Namespace) -> dict[str, object]:
             _admin_or_system(s.role)
             out = archive.run(s.conn, s.cfg, s.base, s.who, args.month, args.dry_run)
         elif args.archive_cmd == "list":
-            out = archive.list_month(s.base, s.cfg, args.month)
+            out = actions.archive_list(s.base, s.cfg, args.month)
         elif args.archive_cmd == "show":
-            out = archive.show(s.base, args.month, args.id, args.log)
+            out = actions.archive_show(s.base, args.month, args.id, args.log)
         elif args.archive_cmd == "search":
-            out = archive.search(s.base, args.month, args.text)
+            out = actions.archive_search(s.base, args.month, args.text)
         else:
-            out = archive.stats(s.conn, args.month)
+            out = actions.archive_stats(s.conn, args.month)
         return out
 
 
@@ -674,6 +663,7 @@ COMMAND_FUNCS = {
     "tomorrow": cmd_today,
     "list": cmd_list,
     "show": cmd_show,
+    "events": cmd_events,
     "report": cmd_report,
     "render": cmd_render,
     "help": cmd_help,
