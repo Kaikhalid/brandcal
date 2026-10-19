@@ -670,7 +670,7 @@
   }
 
   async function loadSprite() {
-    const res = await fetch("/icons.svg", { credentials: "same-origin" });
+    const res = await fetch("/mvp/icons.svg", { credentials: "same-origin" });
     const doc = new DOMParser().parseFromString(await res.text(), "image/svg+xml");
     const sprite = document.importNode(doc.documentElement, true);
     sprite.setAttribute("class", "sr");

@@ -83,7 +83,7 @@ def open_view(context: Any, url: str, query: str, theme: str) -> tuple[Any, list
         "document.addEventListener('securitypolicyviolation',"
         " e => window.__csp.push(e.violatedDirective + ' ' + e.blockedURI));"
     )
-    page.goto(f"{url}/?{query}")
+    page.goto(f"{url}/mvp/?{query}")  # the MVP moved from / to /mvp/ (N0)
     try:
         page.wait_for_selector("[data-ready]", timeout=10_000)
         page.wait_for_selector(".card", timeout=10_000)

@@ -1,19 +1,68 @@
+import { ArrowRight } from "lucide-react"
+
+import { PlatformSwatch, PLATFORMS } from "@/components/platform-swatch"
+import { SessionCard } from "@/components/session-card"
+import { StatusChip, STATUSES } from "@/components/status-chip"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 
+// Foundations only (N0): the tokens, the chips and the session call, end to end under the CSP.
+// The shell (N1), read views (N2) and writes (N3) come later.
 export default function Page() {
   return (
-    <div className="flex min-h-svh p-6">
-      <div className="flex max-w-md min-w-0 flex-col gap-4 text-sm leading-loose">
+    <main className="mx-auto flex max-w-3xl flex-col gap-14 px-6 py-16">
+      <header className="flex items-start justify-between gap-6">
         <div>
-          <h1 className="font-medium">Project ready!</h1>
-          <p>You may now add components and start building.</p>
-          <p>We&apos;ve already added the button component for you.</p>
-          <Button className="mt-2">Button</Button>
+          <h1 className="text-5xl tracking-tight">brandcal</h1>
+          <p className="mt-3 text-label">Foundations preview. Views come next.</p>
         </div>
-        <div className="font-mono text-xs text-muted-foreground">
-          (Press <kbd>d</kbd> to toggle dark mode)
+        <ThemeToggle />
+      </header>
+
+      <section aria-labelledby="who" className="flex flex-col gap-4">
+        <h2 id="who" className="text-xl">
+          Session
+        </h2>
+        <SessionCard />
+      </section>
+
+      <section aria-labelledby="status" className="flex flex-col gap-4">
+        <h2 id="status" className="text-xl">
+          Status
+        </h2>
+        <ul className="flex flex-wrap gap-3">
+          {STATUSES.map((s) => (
+            <li key={s}>
+              <StatusChip status={s} />
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section aria-labelledby="platforms" className="flex flex-col gap-4">
+        <h2 id="platforms" className="text-xl">
+          Platforms
+        </h2>
+        <ul className="flex flex-wrap gap-3">
+          {PLATFORMS.map((p) => (
+            <li key={p}>
+              <PlatformSwatch platform={p} />
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section aria-labelledby="primary" className="flex flex-col gap-4">
+        <h2 id="primary" className="text-xl">
+          Primary action
+        </h2>
+        <div>
+          <Button className="h-10 rounded-full pr-4 pl-5 text-sm" type="button">
+            Review posts
+            <ArrowRight aria-hidden="true" strokeWidth={1.5} className="size-4" />
+          </Button>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   )
 }

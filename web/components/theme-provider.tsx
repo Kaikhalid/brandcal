@@ -12,7 +12,8 @@ function ThemeProvider({
       attribute="class"
       defaultTheme="system"
       enableSystem
-      disableTransitionOnChange
+      // No disableTransitionOnChange: it injects a <style> element at runtime, which the
+      // page's Content-Security-Policy (hashes only, no 'unsafe-inline') would block.
       {...props}
     >
       <ThemeHotkey />

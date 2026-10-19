@@ -19,12 +19,12 @@ from brandcal.config import load_config
 
 WEB = Path(serve.__file__).parent / "web"
 ASSETS = {
-    "/": ("index.html", "text/html; charset=utf-8"),
-    "/index.html": ("index.html", "text/html; charset=utf-8"),
-    "/app.css": ("app.css", "text/css; charset=utf-8"),
-    "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-    "/theme.js": ("theme.js", "text/javascript; charset=utf-8"),
-    "/icons.svg": ("icons.svg", "image/svg+xml"),
+    "/mvp/": ("index.html", "text/html; charset=utf-8"),
+    "/mvp/index.html": ("index.html", "text/html; charset=utf-8"),
+    "/mvp/app.css": ("app.css", "text/css; charset=utf-8"),
+    "/mvp/app.js": ("app.js", "text/javascript; charset=utf-8"),
+    "/mvp/theme.js": ("theme.js", "text/javascript; charset=utf-8"),
+    "/mvp/icons.svg": ("icons.svg", "image/svg+xml"),
 }
 # The SVG namespace is an identifier, not a request.
 NAMESPACE = "http://www.w3.org/2000/svg"
@@ -81,7 +81,7 @@ def test_assets_are_served_with_their_type_and_hardening_headers(client: Client,
 
 
 def test_static_files_need_no_identity_but_the_api_still_does(client: Client) -> None:
-    assert client.get("/app.js").status == 200
+    assert client.get("/mvp/app.js").status == 200
     assert client.get("/api/posts").status == 200  # dev mode reads are open
 
 
@@ -90,14 +90,19 @@ def test_static_files_need_no_identity_but_the_api_still_does(client: Client) ->
     [
         "/static/app.js",
         "/web/app.js",
-        "/app.js/",
-        "/../serve.py",
-        "/%2e%2e/serve.py",
-        "/..%2fserve.py",
-        "/__init__.py",
-        "/icons.svg/../index.html/",
-        "/favicon.ico",
-        "/apple.css",
+        "/app.js",  # the MVP's assets live under /mvp/ since the new UI took /
+        "/app.css",
+        "/theme.js",
+        "/icons.svg",
+        "/mvp/app.js/",
+        "/mvp/../serve.py",
+        "/mvp/%2e%2e/serve.py",
+        "/mvp/..%2fserve.py",
+        "/mvp/__init__.py",
+        "/mvp/icons.svg/../index.html/",
+        "/mvp/favicon.ico",
+        "/mvp/apple.css",
+        "/mvp/static/app.js",
         "/api",
     ],
 )
@@ -107,12 +112,19 @@ def test_paths_outside_the_allow_list_are_404(client: Client, path: str) -> None
     assert json.loads(res.raw)["error"]["code"] == "NOT_FOUND"
 
 
+def test_mvp_without_the_slash_redirects_to_the_slash(client: Client) -> None:
+    res = client.get("/mvp?view=month")
+    assert res.status == 308 and res.headers["location"] == "/mvp/?view=month"
+    assert res.headers["content-security-policy"] == "default-src 'self'"
+
+
 def test_a_query_string_does_not_change_the_page(client: Client) -> None:
-    assert client.get("/?view=month&date=2026-03-09").raw == (WEB / "index.html").read_bytes()
+    assert client.get("/mvp/?view=month&date=2026-03-09").raw == (WEB / "index.html").read_bytes()
 
 
 def test_post_to_a_page_is_404(client: Client) -> None:
     assert client.call("POST", "/").status == 404
+    assert client.call("POST", "/mvp/").status == 404
 
 
 def test_index_has_no_inline_script_handlers_or_styles(client: Client) -> None:
@@ -130,10 +142,14 @@ def test_index_has_no_inline_script_handlers_or_styles(client: Client) -> None:
 def test_theme_script_blocks_in_head_before_styles(client: Client) -> None:
     html = text("index.html")
     head = html[: html.index("</head>")]
-    theme = re.search(r'<script\b[^>]*src="/theme\.js"[^>]*>', head)
+    theme = re.search(r'<script\b[^>]*src="/mvp/theme\.js"[^>]*>', head)
     assert theme is not None
     assert "defer" not in theme.group(0) and "async" not in theme.group(0)
-    assert theme.start() < head.index("/app.css")
+    assert theme.start() < head.index("/mvp/app.css")
+
+
+def test_the_sprite_is_fetched_from_the_mvp_prefix() -> None:
+    assert 'fetch("/mvp/icons.svg"' in text("app.js")
 
 
 def test_index_references_only_allow_listed_assets() -> None:
