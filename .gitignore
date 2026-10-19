@@ -32,11 +32,10 @@ media/
 .vscode/
 .DS_Store
 
-# Front end (web/): Node deps, caches, and build output
+
+# Front end (web/): Node deps, Next.js build cache and static export
 web/node_modules/
-web/dist/
-web/.vite/
-web/*.tsbuildinfo
-node_modules/
+web/.next/
+web/out/
+web/next-env.d.ts
 *.tsbuildinfo
-src/brandcal/web_dist/
