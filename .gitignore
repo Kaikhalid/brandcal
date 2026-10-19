@@ -31,3 +31,12 @@ media/
 .idea/
 .vscode/
 .DS_Store
+
+# Front end (web/): Node deps, caches, and build output
+web/node_modules/
+web/dist/
+web/.vite/
+web/*.tsbuildinfo
+node_modules/
+*.tsbuildinfo
+src/brandcal/web_dist/
