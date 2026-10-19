@@ -1,4 +1,4 @@
-:HL["/_next/static/chunks/41m7d9s2wqfdt.css","style"]
+:HL["/_next/static/chunks/1cg5b26fc8gqj.css","style"]
 2:[["children",{"s":"__PAGE__","h":160}]]
 1:[["children",{"s":"/_not-found","h":96,"c":"$Q2"}]]
 0:{"b":"brandcal-ui","t":{"t":{"s":"","h":80,"c":"$Q1"}}}

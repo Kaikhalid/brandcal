@@ -95,6 +95,27 @@ export interface PostFilters {
 export interface Part {
   pos: number
   text: string
+  /** Where this part went live (a thread has one per part); absent before publishing. */
+  platform_url?: string | null
+}
+
+/** One snapshot of a post's content (GET /api/posts/ID/versions, actions.versions). */
+export interface Version {
+  version: number
+  hash: string
+  parts: string[]
+  first_comment: string | null
+  target_url: string | null
+  alt_texts: string[]
+  /** Who made it and when; null for the live version of a post that predates snapshots. */
+  editor: string | null
+  at: string | null
+}
+
+export interface VersionList {
+  ok: true
+  id: string
+  versions: Version[]
 }
 
 export type MediaKind = "image" | "video" | "pdf" | "gif"
@@ -353,6 +374,10 @@ export function getPosts(filters: PostFilters = {}): Promise<ApiResult<PostList>
 
 export function getPost(id: string): Promise<ApiResult<PostDetail>> {
   return request<PostDetail>(postPath(id))
+}
+
+export function getVersions(id: string): Promise<ApiResult<VersionList>> {
+  return request<VersionList>(`${postPath(id)}/versions`)
 }
 
 export function getEvents(filters: EventFilters = {}): Promise<ApiResult<EventList>> {

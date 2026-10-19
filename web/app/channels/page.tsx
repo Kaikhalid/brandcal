@@ -1,9 +1,14 @@
 import type { Metadata } from "next"
+import { Suspense } from "react"
 
-import { RoutePage } from "@/components/route-page"
+import { ChannelsView } from "@/components/channels-view"
 
 export const metadata: Metadata = { title: "Channels" }
 
 export default function Page() {
-  return <RoutePage view="channels" />
+  return (
+    <Suspense fallback={null}>
+      <ChannelsView />
+    </Suspense>
+  )
 }

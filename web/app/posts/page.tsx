@@ -1,10 +1,14 @@
 import type { Metadata } from "next"
+import { Suspense } from "react"
 
-import { RoutePage } from "@/components/route-page"
+import { PostsView } from "@/components/posts-view"
 
 export const metadata: Metadata = { title: "Posts" }
 
-// The open post is the ?post= query, read on the client; there are no dynamic routes.
 export default function Page() {
-  return <RoutePage view="posts" />
+  return (
+    <Suspense fallback={null}>
+      <PostsView />
+    </Suspense>
+  )
 }

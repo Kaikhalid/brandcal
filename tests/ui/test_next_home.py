@@ -107,6 +107,21 @@ def new_page(
     return page, problems
 
 
+def idle(page: Any) -> None:
+    """Wait until nothing on the page is busy. A locator wait, not wait_for_function: Playwright
+    compiles that predicate with eval, which the page's CSP refuses."""
+    page.locator('[aria-busy="true"]').first.wait_for(state="detached", timeout=10_000)
+
+
+def until(page: Any, expression: str, timeout_ms: int = 10_000) -> None:
+    """Poll a JavaScript expression with page.evaluate (which the CSP does not block)."""
+    for _ in range(timeout_ms // 50):
+        if page.evaluate(expression):
+            return
+        page.wait_for_timeout(50)
+    raise AssertionError(f"timed out waiting for: {expression}")
+
+
 def open_page(
     browser: Any,
     site: tuple[str, str],
@@ -123,7 +138,7 @@ def open_page(
         page.wait_for_selector(".card", timeout=10_000)
     else:
         page.get_by_role("heading", level=1).wait_for(timeout=10_000)
-        page.wait_for_function(IDLE, timeout=10_000)
+        idle(page)
         assert page.evaluate("document.documentElement.classList.contains('dark')") == (
             scheme == "dark"
         )
@@ -219,9 +234,16 @@ def test_the_needs_you_badge_counts_the_posts_that_need_the_viewer(
 
 
 def test_post_id_comes_from_the_query_not_a_route(browser: Any, site: tuple[str, str]) -> None:
-    page, problems = open_page(browser, site, "/posts/", "light", query="?post=launch-thread")
+    page, problems = open_page(browser, site, "/posts/", "light")
     try:
-        assert page.get_by_text("Selected post: launch-thread").is_visible()
+        pid = page.evaluate(
+            "async () => (await (await fetch('/api/posts?closed=1')).json()).posts"
+            ".find(p => p.title === 'Spring launch thread').id"
+        )
+        page.goto(f"{site[0]}/posts/?post={pid}")
+        panel = page.get_by_role("complementary", name="Spring launch thread")
+        panel.wait_for(timeout=10_000)
+        assert panel.is_visible()
         assert not problems
     finally:
         page.context.close()
