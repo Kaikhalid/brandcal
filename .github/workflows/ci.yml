@@ -36,3 +36,28 @@ jobs:
         run: pytest
       - name: Privacy scan
         run: python scripts/privacy_scan.py
+
+  ui-screens:
+    name: ui-screens (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,crypto,ui-test]"
+      - name: Install chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Screenshot tests
+        run: pytest tests/ui -q
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-shots
+          path: build/ui-shots
+          if-no-files-found: warn

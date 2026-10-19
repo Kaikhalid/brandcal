@@ -409,6 +409,14 @@ Agents learn about human changes in two ways:
 Post cards also show small badges for "natively scheduled", "claimed", "on hold" and an
 unverified-dev flag, all from post fields.
 
+**Licensing of the shipped icons.** `src/brandcal/web/icons.svg` is a hand-drawn outline set
+made for this project on a 24 px grid (1.5 px stroke, `currentColor`, round caps). It copies no
+third-party artwork and is released under the project's MIT licence. Platform glyphs are
+generic metaphors (briefcase, bolt, camera, play, cloud, hexagon), never a platform's logo or
+trade dress, so no trademark licence is needed; the platform id is always printed beside the
+glyph. Any icon added later must be drawn in-house or come from a set whose licence permits
+redistribution, with its licence file added next to the sprite.
+
 ### 5.3 Post detail panel
 
 - Exact text of each part, as stored, in a preformatted block (nothing trimmed).

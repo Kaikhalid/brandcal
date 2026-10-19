@@ -2,7 +2,8 @@
 
 Binds to 127.0.0.1 only. Every endpoint calls ``actions`` and returns the CLI's JSON; the
 server adds only the HTTP frame: identity, origin and CSRF checks, status codes and headers.
-Static files wait for U2 (non-/api paths are 404).
+The web views in ``brandcal/web/`` are served from a fixed allow-list; any other non-/api GET
+is 404. An unexpected exception is a JSON 500 (code INTERNAL) with no detail.
 """
 
 from __future__ import annotations
@@ -26,10 +27,21 @@ from brandcal import actions, identity, posts
 from brandcal.approvals import CONSOLE_SOURCE, Verified
 from brandcal.config import display_tz
 from brandcal.db import open_db
-from brandcal.errors import BrandcalError, ErrorCode
+from brandcal.errors import EXIT_CODES, BrandcalError, ErrorCode
 from brandcal.identity import Verifier
 
 HOST = "127.0.0.1"
+WEB = Path(__file__).parent / "web"
+# URL path -> (file in WEB, content type): the only static files that are ever served.
+PAGES = {
+    "/": ("index.html", "text/html; charset=utf-8"),
+    "/index.html": ("index.html", "text/html; charset=utf-8"),
+    "/app.css": ("app.css", "text/css; charset=utf-8"),
+    "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+    "/theme.js": ("theme.js", "text/javascript; charset=utf-8"),
+    "/icons.svg": ("icons.svg", "image/svg+xml"),
+}
+EXIT_INTERNAL = int(EXIT_CODES[ErrorCode.INTERNAL])
 BODY_LIMIT = 256 * 1024
 DEV_SOURCE = "dev-unverified"
 ALLOWED_METHODS = "GET, POST"
@@ -270,8 +282,10 @@ class _Handler(BaseHTTPRequestHandler):
         extra: Body = {}
         try:
             url = urlsplit(self.path)
+            if self.command == "GET" and url.path in PAGES:
+                return self._page(*PAGES[url.path])
             parts = [unquote(p) for p in url.path.split("/")[1:]]
-            if parts[0] != "api" or len(parts) < 2:
+            if len(parts) < 2 or parts[0] != "api":
                 raise _not_found("page")
             body = self._read_body() if self.command == "POST" else b""
             session = self.server.app.session(self.headers.get("Cf-Access-Jwt-Assertion"))
@@ -281,6 +295,16 @@ class _Handler(BaseHTTPRequestHandler):
                 self._post(parts[1:], session, body, extra)
         except BrandcalError as err:
             self._refuse(err, extra)
+        except Exception:  # never show a traceback, a path or any request data to the client
+            fault = _refusal(
+                ErrorCode.INTERNAL,
+                "The server hit an unexpected fault and could not answer this request.",
+                "Try again; if it keeps happening, tell the admin to check the server's log.",
+            )
+            self._json(500, fault.to_dict(), fault.exit_code)
+
+    def _page(self, name: str, ctype: str) -> None:
+        self._send(200, (WEB / name).read_bytes(), ctype)
 
     def _read_body(self) -> bytes:
         length = self.headers.get("Content-Length", "")
