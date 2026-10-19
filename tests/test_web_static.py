@@ -177,6 +177,15 @@ def test_the_sticky_bar_does_not_hide_keyboard_focus() -> None:
     assert re.search(r"html\s*\{[^}]*scroll-padding-top:\s*\d+px", text("app.css"))
 
 
+def test_the_bar_is_not_sticky_in_small_viewports_or_at_large_zoom() -> None:
+    css = text("app.css")
+    query = r"@media \(max-width: 760px\), \(max-height: 560px\)"
+    block = re.search(query + r"\s*\{(.*?)\n\}", css, re.S)
+    assert block
+    assert re.search(r"\.bar\s*\{[^}]*position:\s*static", block.group(1))
+    assert re.search(r"\.panel\s*\{[^}]*top:\s*12px\s*!important", block.group(1))
+
+
 def rule(selector: str) -> str:
     match = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", text("app.css"))
     assert match, selector

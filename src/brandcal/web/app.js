@@ -487,7 +487,8 @@
     });
     document.body.append(dlg);
     dlg.showModal();
-    (dlg.querySelector("textarea, input, select") || go).focus();
+    // A decision with no fields opens on "Go back", so a stray Enter never approves (U3 review M3).
+    (dlg.querySelector("textarea, input, select") || back).focus();
   }
 
   function actionRows(post) {

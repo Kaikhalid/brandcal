@@ -281,6 +281,13 @@ html[data-ready] .needs-toggle .chev { transition: rotate 200ms var(--ease); }
   .needs { grid-template-columns: 1fr; }
 }
 
+/* Small viewports and 200% zoom: a sticky bar would cover most of the window and shrink the panel, so it scrolls away. */
+@media (max-width: 760px), (max-height: 560px) {
+  html { scroll-padding-top: 12px; }
+  .bar { position: static; }
+  .panel { top: 12px !important; }
+}
+
 /* Write actions (U3): confirm dialog, forms, diff. Inner controls 12px inside a 24px dialog with 12px padding. */
 .notice { margin: 0 16px; min-height: 0; color: var(--ink-muted); }
 .stale { margin: 0 0 12px; font-weight: 600; }
