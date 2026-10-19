@@ -146,6 +146,14 @@ All responses are JSON in the CLI shape; every request is authenticated (2.3).
 | `POST /api/posts/ID/approve` / `request-changes` / `reschedule` / `cancel` / `edit` / `submit` / `note` | write actions |
 
 Write bodies are JSON and always carry `version`, `hash` and `window` as the UI saw them (3.3).
+Extra fields: `request-changes` `what`, `where`, `instruction`; `reschedule` `new_window` (its
+`window` is the one the UI saw); `cancel` `kind`, `reason`; `edit` `fields` (an object of text
+values); `note` `text`. The server supplies the button id and label recorded with a decision (for
+example `console-approve`, "Approve"). `STALE_APPROVAL` responses carry `current`, the post as
+`GET /api/posts/ID` would return it. Unknown methods (including `OPTIONS`) get 405 with
+`Allow: GET, POST`. The CSRF token is the HMAC of the identity under a per-process secret, so it
+changes when the server restarts. Every JSON response carries `X-Brandcal-Exit`. Config is read
+once at start; restart to apply changes.
 
 ### 2.3 Identity
 
@@ -489,7 +497,10 @@ U1 is split in two sessions. **U1a (core)** is items 1 to 4, 7 and 10: `src/bran
 `tests/test_migrate_0002.py`, `tests/test_events_cmd.py`, `tests/test_console.py`. Console
 decisions are driven through `actions` with a verified `Identity`; the CLI cannot record
 them. **U1b (serve and identity)** is items 5, 6, 8 and 9: `src/brandcal/serve.py` (new),
-`tests/test_serve_api.py`; it also raises `IDENTITY_UNMAPPED`, `BAD_ORIGIN` and
+`src/brandcal/identity.py` (new; U4 only reviews it against a real Access application),
+`tests/test_serve_api.py`, `tests/test_identity.py`; it adds the optional `seen_window` /
+`seen` checks to the decisions in `approvals.py` and `actions.py` (3.3) and `actions.post_actions`
+(1.5); it also raises `IDENTITY_UNMAPPED`, `BAD_ORIGIN` and
 `EXTRA_NOT_INSTALLED`, which U1a only defines.
 
 1. CLI handlers move to `actions.py` with no behaviour change; the existing suite passes.

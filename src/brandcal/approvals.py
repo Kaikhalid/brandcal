@@ -124,8 +124,14 @@ def _expect(post: sqlite3.Row, *statuses: str) -> None:
         )
 
 
-def _bind(post: sqlite3.Row, version: int, hash_prefix: str) -> None:
-    """The decision must name the post's current version and the start of its hash."""
+def _bind(
+    post: sqlite3.Row, version: int, hash_prefix: str, seen_window: str | None = None
+) -> None:
+    """The decision must name the post's current version and the start of its hash.
+
+    The console also sends the window it showed (UI_SPEC 3.3): the window is not in the hash,
+    so a different one counts as stale too.
+    """
     prefix = hash_prefix.lower()
     if not _HEX.fullmatch(prefix):
         raise bad_args("The hash must be 8 or more hex characters.", "Copy it from the card.")
@@ -135,6 +141,12 @@ def _bind(post: sqlite3.Row, version: int, hash_prefix: str) -> None:
             f"{post['id']} is now version {post['content_version']}"
             f" ({post['content_hash'][:8]}), not version {version} ({prefix[:8]}).",
             f"Send the approver the current version: brandcal preview {post['id']}",
+        )
+    if seen_window is not None and seen_window != post["window"]:
+        raise BrandcalError(
+            ErrorCode.STALE_APPROVAL,
+            f"{post['id']} now has the window {post['window']}, not {seen_window}.",
+            "Read the post again before deciding.",
         )
 
 
@@ -210,6 +222,7 @@ def approve(
     approver: str | None = None,
     *,
     verified: Verified | None = None,
+    seen_window: str | None = None,
 ) -> Any:
     console = _gate(role, cfg, channel, verified, "record an approval")
     if console is not None:
@@ -232,7 +245,7 @@ def approve(
     with transaction(conn):
         post = load_post(conn, post_id)
         _expect(post, "pending_approval")
-        _bind(post, version, hash_prefix)
+        _bind(post, version, hash_prefix, seen_window)
         errors, warnings = validate.validate(conn, post_id, platform_limits(conn), cfg, "check")
         raise_first(errors)
         at, month = now_and_month(cfg)
@@ -282,6 +295,7 @@ def request_changes(
     instruction: str | None = None,
     channel: str = "card",
     verified: Verified | None = None,
+    seen_window: str | None = None,
 ) -> Any:
     console = _gate(role, cfg, channel, verified, "record a request for changes")
     if channel not in ("card", "console"):
@@ -293,7 +307,7 @@ def request_changes(
     with transaction(conn):
         post = load_post(conn, post_id)
         _expect(post, "pending_approval")
-        _bind(post, version, hash_prefix)
+        _bind(post, version, hash_prefix, seen_window)
         at, month = now_and_month(cfg)
         approval = _record(
             conn,
@@ -334,6 +348,7 @@ def reschedule(
     *,
     channel: str = "card",
     verified: Verified | None = None,
+    seen_window: str | None = None,
 ) -> Any:
     """Time-only decision: the new window becomes the approved one; a missed post is approved."""
     console = _gate(role, cfg, channel, verified, "record a time change")
@@ -344,7 +359,7 @@ def reschedule(
     with transaction(conn):
         post = load_post(conn, post_id)
         _expect(post, "approved", "missed")
-        _bind(post, version, hash_prefix)
+        _bind(post, version, hash_prefix, seen_window)
         at, month = now_and_month(cfg)
         approval = _record(
             conn,
@@ -389,7 +404,9 @@ def cancel(
     *,
     channel: str = "card",
     verified: Verified | None = None,
+    seen: tuple[int, str, str] | None = None,
 ) -> Any:
+    """``seen`` is the (version, hash, window) the console showed; it is checked as for approve."""
     if kind not in CANCEL_KINDS:
         raise bad_args(f"Unknown cancel kind {kind!r}.", f"Use one of: {' '.join(CANCEL_KINDS)}")
     _need("reason", reason)
@@ -409,6 +426,8 @@ def cancel(
             raise BrandcalError(
                 ErrorCode.POST_CLOSED, f"{post_id} is {post['status']} and cannot be changed."
             )
+        if seen is not None:
+            _bind(post, seen[0], seen[1], seen[2])
         # Transition roles name who records a decision; a console decision is the approver's
         # own, recorded for them, so it is checked as the manager's (UI_SPEC 3.5).
         check_transition(post["status"], "cancelled", "manager" if console else role)
