@@ -1,0 +1,6 @@
+:HL["/_next/static/chunks/41m7d9s2wqfdt.css","style"]
+:HL["/_next/static/media/GeistMono_Variable.p.074yowjdp83r3.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
+:HL["/_next/static/media/Geist_Variable-s.p.142kz3f7gseln.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
+2:[["children",{"s":"__PAGE__","h":160}]]
+1:[["children",{"s":"channels","h":96,"c":"$Q2"}]]
+0:{"b":"brandcal-ui","t":{"t":{"s":"","h":80,"c":"$Q1"}}}

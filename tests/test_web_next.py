@@ -307,6 +307,64 @@ def test_the_built_home_page_is_served_with_its_own_hashes(
         server.server_close()
 
 
+ROUTES = ["/", "/needs-you/", "/posts/", "/channels/", "/activity/", "/settings/"]
+
+
+def route_file(route: str) -> str:
+    return "index.html" if route == "/" else f"{route.strip('/')}/index.html"
+
+
+@pytest.mark.parametrize("route", ROUTES)
+def test_every_shell_route_is_served_with_the_hashes_of_its_own_inline_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, route: str
+) -> None:
+    number, server = start(make_home(tmp_path / "home", monkeypatch), BUILT)
+    try:
+        res = fetch(number, route)
+        assert res.status == 200, route
+        assert res.headers["content-type"] == "text/html; charset=utf-8"
+        assert res.raw == (BUILT / route_file(route)).read_bytes()
+        manifest = json.loads((BUILT / "csp.json").read_text(encoding="utf-8"))[route_file(route)]
+        policy = res.headers["content-security-policy"]
+        assert manifest["script"], route  # the theme script and the Next bootstrap are inline
+        for key in ("script", "style", "style_attr"):
+            for digest in manifest[key]:
+                assert f"'{digest}'" in policy, (route, key)
+        # 'unsafe-hashes' exactly when the page has style="" attributes, never anything broader.
+        assert ("'unsafe-hashes'" in policy) == bool(manifest["style_attr"]), route
+        assert "'unsafe-inline'" not in policy and "'unsafe-eval'" not in policy
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.parametrize("route", ROUTES[1:])
+def test_a_shell_route_without_its_trailing_slash_redirects_and_keeps_the_query(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, route: str
+) -> None:
+    number, server = start(make_home(tmp_path / "home", monkeypatch), BUILT)
+    try:
+        bare = route.rstrip("/")
+        res = fetch(number, f"{bare}?post=launch-thread")
+        assert res.status == 308 and res.headers["location"] == f"{route}?post=launch-thread"
+        # The query is ignored for the lookup, so a shared ?post= link still gets the page.
+        assert fetch(number, f"{route}?post=launch-thread").status == 200
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_the_shell_pages_set_distinct_titles() -> None:
+    titles = {}
+    for route in ROUTES:
+        page = (BUILT / route_file(route)).read_text(encoding="utf-8")
+        match = re.search(r"<title>([^<]*)</title>", page)
+        assert match, route
+        titles[route] = html.unescape(match.group(1))
+    assert len(set(titles.values())) == len(ROUTES), titles
+    assert all(t.endswith(" · brandcal") for t in titles.values()), titles
+
+
 def test_built_pages_have_no_inline_event_handlers_or_external_urls() -> None:
     for page in built_pages():
         body = page.read_text(encoding="utf-8")

@@ -3,6 +3,8 @@
 import * as React from "react"
 import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes"
 
+import { isTyping, useShortcuts } from "@/components/shortcuts"
+
 function ThemeProvider({
   children,
   ...props
@@ -22,25 +24,14 @@ function ThemeProvider({
   )
 }
 
-function isTypingTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) {
-    return false
-  }
-
-  return (
-    target.isContentEditable ||
-    target.tagName === "INPUT" ||
-    target.tagName === "TEXTAREA" ||
-    target.tagName === "SELECT"
-  )
-}
-
+// "d" flips the theme; like the other single-key shortcuts it can be switched off in Settings.
 function ThemeHotkey() {
   const { resolvedTheme, setTheme } = useTheme()
+  const { enabled } = useShortcuts()
 
   React.useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.defaultPrevented || event.repeat) {
+      if (!enabled || event.defaultPrevented || event.repeat) {
         return
       }
 
@@ -52,7 +43,7 @@ function ThemeHotkey() {
         return
       }
 
-      if (isTypingTarget(event.target)) {
+      if (isTyping(event.target)) {
         return
       }
 
@@ -64,7 +55,7 @@ function ThemeHotkey() {
     return () => {
       window.removeEventListener("keydown", onKeyDown)
     }
-  }, [resolvedTheme, setTheme])
+  }, [enabled, resolvedTheme, setTheme])
 
   return null
 }
