@@ -1,14 +1,18 @@
 "use client"
 
 import { PanelLeft } from "lucide-react"
+import { usePathname } from "next/navigation"
 
 import { AppDataProvider } from "@/components/app-data"
 import { AppSidebar } from "@/components/app-sidebar"
 import { DevBanner } from "@/components/dev-banner"
+import { PostPanel } from "@/components/post-panel"
 import { Shortcuts } from "@/components/shortcuts"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { isCurrent } from "@/lib/nav"
+import { cn } from "@/lib/utils"
 
 // A circular icon button: toggles the rail on desktop, opens the navigation sheet on a phone.
 function ShellTrigger() {
@@ -30,6 +34,9 @@ function ShellTrigger() {
 // The shell: skip link, dev banner, glass sidebar (a sheet on a phone), a frosted bar that sticks
 // to the top of the content, and <main>. Landmarks: one banner (the bar), one nav, one main.
 function AppShell({ children }: { children: React.ReactNode }) {
+  // The calendar and the posts table need the width; the rest read better narrow.
+  const pathname = usePathname()
+  const wide = isCurrent("/", pathname) || isCurrent("/posts/", pathname)
   return (
     <AppDataProvider>
       <TooltipProvider delay={300}>
@@ -42,20 +49,27 @@ function AppShell({ children }: { children: React.ReactNode }) {
         <DevBanner />
         <SidebarProvider>
           <Shortcuts />
-          <AppSidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <header className="glass sticky top-(--shell-top) z-20 flex h-16 items-center justify-between gap-3 px-4 md:px-6">
-              <ShellTrigger />
-              <ThemeToggle />
-            </header>
-            <main
-              id="main"
-              tabIndex={-1}
-              className="mx-auto w-full max-w-5xl flex-1 px-6 py-10 outline-none md:py-14"
-            >
-              {children}
-            </main>
+          {/* Inert while the post panel overlays the page (below 1200px); see post-panel.tsx. */}
+          <div id="shell-body" className="contents">
+            <AppSidebar />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <header className="glass sticky top-(--shell-top) z-20 flex h-16 items-center justify-between gap-3 px-4 md:px-6">
+                <ShellTrigger />
+                <ThemeToggle />
+              </header>
+              <main
+                id="main"
+                tabIndex={-1}
+                className={cn(
+                  "mx-auto w-full flex-1 px-6 py-10 outline-none md:py-14",
+                  wide ? "max-w-[88rem]" : "max-w-5xl"
+                )}
+              >
+                {children}
+              </main>
+            </div>
           </div>
+          <PostPanel />
         </SidebarProvider>
       </TooltipProvider>
     </AppDataProvider>

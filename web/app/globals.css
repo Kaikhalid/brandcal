@@ -298,6 +298,19 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* The week grid: one hairline per hour, drawn by the column itself. */
+  .hour-grid {
+    --hour: 9rem;
+    height: calc(var(--hour) * 24);
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent calc(var(--hour) - 1px),
+      var(--hairline) calc(var(--hour) - 1px),
+      var(--hairline) var(--hour)
+    );
+  }
+
   /* Tactile press: interruptible, names the property it moves (never "all"). */
   .press {
     transition-property: scale, background-color, color, box-shadow;

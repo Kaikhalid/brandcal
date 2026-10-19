@@ -1,14 +1,18 @@
+"use client"
+
 import {
-  Ban,
   CalendarClock,
-  CircleCheck,
+  Check,
   CircleDashed,
   Clock,
+  Globe,
   Pencil,
   TriangleAlert,
+  X,
   type LucideIcon,
 } from "lucide-react"
 
+import { useAppData } from "@/components/app-data"
 import { cn } from "@/lib/utils"
 
 // Status is always an icon and a word, never colour alone (docs/UI_STYLE.md). Chips are keyed by
@@ -27,7 +31,7 @@ const FAILED = "bg-st-failed text-st-failed-ink"
 const draft: Look = { label: "Draft", Icon: Pencil, tone: DRAFT }
 const awaiting: Look = { label: "Awaiting you", Icon: Clock, tone: AWAITING }
 const scheduled: Look = { label: "Scheduled", Icon: CalendarClock, tone: SCHEDULED }
-const published: Look = { label: "Published", Icon: CircleCheck, tone: PUBLISHED }
+const published: Look = { label: "Published", Icon: Globe, tone: PUBLISHED }
 const failed: Look = { label: "Failed", Icon: TriangleAlert, tone: FAILED }
 
 const STATUS: Record<string, Look> = {
@@ -38,9 +42,10 @@ const STATUS: Record<string, Look> = {
   failed,
   pending_approval: awaiting,
   changes_requested: { label: "Changes requested", Icon: Pencil, tone: DRAFT },
-  approved: scheduled,
+  // UI_SPEC 5.2 shapes: clock, pencil, check, triangle-alert, globe, x.
+  approved: { ...scheduled, Icon: Check },
   missed: { label: "Missed", Icon: TriangleAlert, tone: FAILED },
-  cancelled: { label: "Cancelled", Icon: Ban, tone: DRAFT },
+  cancelled: { label: "Cancelled", Icon: X, tone: DRAFT },
 }
 
 /** "some_status" -> "Some status" for an id with no entry above. */
@@ -53,17 +58,24 @@ function lookFor(status: string): Look {
   return STATUS[status] ?? { label: humanise(status), Icon: CircleDashed, tone: DRAFT }
 }
 
-/** The word a chip prints for a status id. */
-export const statusLabel = (status: string) => lookFor(status).label
+/** The word a chip prints for a status id. A post awaiting approval says "Awaiting you" only to
+ *  the approver, who is the one who must act; everyone else reads "Awaiting approval". */
+export function statusLabel(status: string, role?: string | null): string {
+  if (status === "pending_approval" && role !== "approver") return "Awaiting approval"
+  return lookFor(status).label
+}
 
 /** The five styles of UI_STYLE, for galleries. */
 export const STATUS_STYLES = ["draft", "awaiting", "scheduled", "published", "failed"] as const
 
 function StatusChip({ status, className }: { status: string; className?: string }) {
-  const { label, Icon, tone } = lookFor(status)
+  const { session } = useAppData()
+  const { Icon, tone } = lookFor(status)
+  const label = statusLabel(status, session.state === "ok" ? session.data.role : null)
   return (
     <span
       data-status={status}
+      title={status}
       className={cn(
         "inline-flex h-7 items-center gap-1.5 rounded-full pr-3 pl-2.5 text-[0.8125rem] leading-none whitespace-nowrap",
         tone,

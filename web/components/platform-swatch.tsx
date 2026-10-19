@@ -22,6 +22,20 @@ const UNKNOWN_TONE = "bg-muted text-ink"
 
 export const platformLabel = (id: string) => (isKnown(id) ? PLATFORM[id].label : id)
 
+/** The pastel fill and its readable ink for a platform id (neutral for an unknown one). */
+export const platformTone = (id: string) => (isKnown(id) ? PLATFORM[id].tone : UNKNOWN_TONE)
+
+/** Icon and name with no fill, for text that already sits on the platform's pastel. */
+function PlatformMark({ platform, className }: { platform: string; className?: string }) {
+  const Icon = isKnown(platform) ? Megaphone : Globe
+  return (
+    <span data-platform={platform} className={cn("inline-flex items-center gap-1.5 text-xs", className)}>
+      <Icon aria-hidden="true" strokeWidth={1.5} className="size-4 shrink-0" />
+      {platformLabel(platform)}
+    </span>
+  )
+}
+
 /** A small pill: pastel, icon, name. */
 function PlatformBadge({ platform, className }: { platform: string; className?: string }) {
   const known = isKnown(platform)
@@ -57,4 +71,4 @@ function PlatformSwatch({ platform, className }: { platform: string; className?:
   )
 }
 
-export { PlatformBadge, PlatformSwatch }
+export { PlatformBadge, PlatformMark, PlatformSwatch }
