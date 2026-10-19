@@ -253,7 +253,10 @@
   html {
     @apply font-sans antialiased;
     -moz-osx-font-smoothing: grayscale;
-    scroll-padding-top: 5rem;
+    /* Height of the dev banner (0 when absent), set by components/dev-banner.tsx. The sticky
+       shell bar sits below it, so scrolled focus must clear both (WCAG 2.4.11). */
+    --shell-top: 0px;
+    scroll-padding-top: calc(var(--shell-top) + 5.5rem);
   }
   body {
     @apply bg-background text-foreground;
