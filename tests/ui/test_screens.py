@@ -148,6 +148,33 @@ def test_escape_closes_the_panel_and_returns_focus(browser_page: tuple[Any, str]
     page.close()
 
 
+def test_the_panel_does_not_overlap_the_grid_at_1440(browser_page: tuple[Any, str]) -> None:
+    page, problems = open_view(*browser_page, f"view=week&date={WEEK.isoformat()}", "light")
+    page.locator("#calendar .card", has_text="Spring launch thread").click()
+    page.wait_for_selector("#panel[data-open='true'] .count")
+    page.wait_for_timeout(300)
+    grid = page.locator("#calendar .week").bounding_box()
+    panel = page.locator("#panel").bounding_box()
+    assert grid and panel and grid["x"] + grid["width"] <= panel["x"], (grid, panel)
+    assert not problems
+    page.close()
+
+
+def test_needs_strip_collapses_to_a_count_bar_and_is_remembered(
+    browser_page: tuple[Any, str],
+) -> None:
+    page, problems = open_view(*browser_page, f"view=week&date={WEEK.isoformat()}", "light")
+    toggle = page.locator("#needs-toggle")
+    assert toggle.get_attribute("aria-expanded") == "true"
+    toggle.click()
+    assert toggle.get_attribute("aria-expanded") == "false"
+    assert page.locator("#needs").is_hidden() and page.locator("#needs-counts .cnt").count() >= 3
+    assert page.evaluate("localStorage.getItem('brandcal-needs')") == "collapsed"
+    page.wait_for_timeout(200)
+    page.evaluate("localStorage.removeItem('brandcal-needs')")  # the context is shared
+    finish(page, problems, "needs-collapsed-light.png")
+
+
 def test_refusals_and_disabled_buttons_show_code_and_next(browser_page: tuple[Any, str]) -> None:
     page, problems = open_view(*browser_page, f"view=week&date={WEEK.isoformat()}", "light")
     page.locator("#calendar .card", has_text="Partner announcement").click()

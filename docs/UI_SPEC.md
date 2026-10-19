@@ -381,6 +381,14 @@ Agents learn about human changes in two ways:
 
 - **Needs you** strip, always at the top: three counts and lists for `pending_approval`,
   `changes_requested` and `missed`, from `list --status`. Clicking one opens the post panel.
+  The strip is collapsible: a button with `aria-expanded` toggles it, the choice is kept in
+  `localStorage` (`brandcal-needs`), and collapsed it is one compact row of the three counts.
+- **Today** is marked by a ring and a visible "Today" label in week and month views, never by
+  colour alone.
+- **Panel layout**: from 1200 px wide the open panel sits beside the grid (the grid shrinks;
+  `main` gets right padding equal to the panel width); below that it overlays the page with a
+  dimmed scrim, and a click on the scrim or Esc closes it. Focus moves into the panel on open
+  and returns to the card on close.
 - **Week** (default) and **Month** views over `list --from --to`. Posts are placed by window
   start in the configured timezone and show the window ("09:00 to 10:00", offset shown on
   hover). No timezone is assumed in the browser: all times are rendered from the server's
@@ -425,12 +433,17 @@ redistribution, with its licence file added next to the sprite.
 - Media preview with the **alt text** shown beneath and a warning if empty.
 - First comment, target URL, window, campaign, pillar, notes.
 - **Version history**: each version with its hash, editor and time; select two for a text diff
-  (client-side, display only).
+  (client-side, display only). Versions are rebuilt from the snapshots stored in the events,
+  so there is no migration `0003`.
 - **Fingerprint**: the first 8 characters of the hash, click to copy the full hash.
 - Live URL(s) when published; claim and native schedule fields when set.
 - **Audit trail** from `events` for that post, with the actor, the verified identity and
   source, and decision words. Console approvals are tagged "console (verified)".
-- Action buttons per 1.5, each with its `brandcal ...` line.
+- Action buttons per 1.5, each with its `brandcal ...` line labelled "Agent equivalent (CLI)".
+  The confirm dialog repeats the label and adds: "This console action records channel console
+  with your verified identity." The note button comes from the API under its own `note` key,
+  beside `actions`, because a note is not a state transition.
+- An unexpected server error is `INTERNAL`, exit code 9 (ERRORS.md, SPEC 8.2).
 
 ---
 
@@ -438,7 +451,8 @@ redistribution, with its licence file added next to the sprite.
 
 Minimal glassmorphism, used for **structure only**:
 
-- Translucent (`backdrop-filter: blur(12px)`) for panels, the top bar and the side drawer.
+- Translucent (`backdrop-filter: blur(24px)`, about 72% fill) for the floating layer only: the
+  top bar and the side panel. Dialogs and cards are solid.
 - **Text, icons, borders of status badges and status colours are solid**, always drawn on a
   panel whose effective background stays above the contrast limit.
 - WCAG 2.2 AA: 4.5:1 for text, 3:1 for icons and focus rings; visible focus; keyboard
@@ -452,7 +466,7 @@ Light tokens (solid colours, checked at least 4.5:1 on `--bg` and `--panel-solid
 | Token | Value | Use |
 |---|---|---|
 | `--bg` | `#F4F6FA` | page |
-| `--panel-glass` | `rgba(255,255,255,0.62)` | translucent panel |
+| `--panel-glass` | `rgba(255,255,255,0.72)` | translucent panel |
 | `--panel-solid` | `#FFFFFF` | fallback panel |
 | `--ink` / `--ink-muted` | `#0F172A` / `#475569` | text |
 | `--accent` | `#1D4ED8` | links, focus |
@@ -464,7 +478,9 @@ Light tokens (solid colours, checked at least 4.5:1 on `--bg` and `--panel-solid
 | `--st-cancelled` | `#475569` | grey |
 
 U2 includes a computed-contrast test over every token pair, so the table is verified, not
-assumed. Font: system stack, no web fonts, no external requests of any kind.
+assumed. Font: `"Inter"` if installed, then the system stack (CI installs `fonts-inter`); no
+web fonts, no external requests of any kind. Text sizes are `rem` (root 87.5%), no px sizes.
+Entrance animation is a 250 ms fade with 4 px lift and 2 px blur; reduced motion fades only.
 
 ---
 

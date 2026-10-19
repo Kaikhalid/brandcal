@@ -119,4 +119,4 @@ def test_the_light_theme_keeps_the_spec_values() -> None:
     }
     for name, value in expected.items():
         assert light[name].upper() == value, name
-    assert light["--panel-glass"].replace(" ", "") == "rgba(255,255,255,0.62)"
+    assert light["--panel-glass"].replace(" ", "") == "rgba(255,255,255,0.72)"

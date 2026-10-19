@@ -14,6 +14,7 @@
   const seen = new Set();
   let loadSeq = 0;
   let panelSeq = 0;
+  const NEEDS_KEY = "brandcal-needs";
   let opener = null;
 
   // ---- small helpers -------------------------------------------------------------------
@@ -190,11 +191,12 @@
     const button = el("button", { type: "button", class: compact ? "card compact rise" : "card rise", data: { status: post.status, id: post.id }, title: post.window.replace("/", " to ") });
     if (state.post === post.id) button.setAttribute("aria-current", "true");
     if (compact) {
-      button.append(icon("status", post.status), el("span", { class: "when num", text: w.from }), el("span", { class: "title", text: post.title }));
+      button.append(icon("status", post.status), el("span", { class: "when num", text: w.from }), el("span", { class: "title", text: post.title, title: post.title }));
       button.setAttribute("aria-label", `${post.title}, ${words(post.status)}, ${post.platform}, ${kind}, ${w.text}`);
     } else {
       button.append(
-        el("span", { class: "row between" }, statusChip(post.status), el("span", { class: "when num", text: w.text })),
+        statusChip(post.status),
+        el("span", { class: "when num", text: w.text }),
         el("span", { class: "title", text: post.title }),
         el("span", { class: "row" }, platformTag(post.platform), kind && typeTag(kind), detail && badges(detail)),
       );
@@ -217,6 +219,7 @@
   function renderNeeds() {
     const box = $("needs");
     box.replaceChildren();
+    $("needs-counts").replaceChildren(...needs().map((id) => el("span", { class: "cnt", data: { status: id } }, icon("status", id), words(id), el("span", { class: "num", text: String((state.needs[id] || []).length) }))));
     needs().forEach((id) => {
       const list = state.needs[id] || [];
       const ul = el("ul", {});
@@ -240,7 +243,10 @@
       const key = addDays(from, i);
       const mine = posts.filter((p) => span(p.window).day === key);
       const head = el("h3", { class: "day-head" }, DAYS[dowOf(key)], el("span", { class: "num", text: String(parseDate(key)[2]) }));
-      if (key === today()) head.setAttribute("aria-current", "date");
+      if (key === today()) {
+        head.setAttribute("aria-current", "date");
+        head.append(el("span", { class: "today-tag", text: "Today" }));
+      }
       const col = el("section", { class: "col rise", data: { chunk: 1 + Math.floor(i / 2) }, "aria-label": dayLabel(key) }, head, ...mine.map((p) => card(p, state.details.get(p.id), false)));
       if (!mine.length) col.append(el("p", { class: "none", text: "Nothing planned." }));
       grid.append(col);
@@ -255,8 +261,11 @@
     DAYS.slice(1).concat(DAYS[0]).forEach((d) => grid.append(el("div", { class: "dow", text: d })));
     for (let key = from, n = 0; key <= to; key = addDays(key, 1), n++) {
       const mine = posts.filter((p) => span(p.window).day === key);
-      const cell = el("div", { class: "day rise", role: "group", "aria-label": dayLabel(key), data: { chunk: Math.floor(n / 7), outside: String(parseDate(key)[1] !== month) } }, el("span", { class: "num", text: String(parseDate(key)[2]) }));
-      if (key === today()) cell.setAttribute("aria-current", "date");
+      const cell = el("div", { class: "day rise", role: "group", "aria-label": dayLabel(key), data: { chunk: Math.floor(n / 7), outside: String(parseDate(key)[1] !== month) } }, el("div", { class: "day-top" }, el("span", { class: "num", text: String(parseDate(key)[2]) })));
+      if (key === today()) {
+        cell.setAttribute("aria-current", "date");
+        cell.firstChild.append(el("span", { class: "today-tag", text: "Today" }));
+      }
       mine.slice(0, 3).forEach((p) => cell.append(card(p, state.details.get(p.id), true)));
       if (mine.length > 3) {
         const more = el("button", { type: "button", class: "more", text: `+${mine.length - 3} more` });
@@ -445,8 +454,8 @@
     const errorBox = el("div", { class: "refusal", role: "alert", hidden: true });
     const go = el("button", { type: "submit", class: spec.danger ? "btn primary danger" : "btn primary", text: a.id === "approve" ? `Approve version ${post.content_version}` : a.label });
     const back = el("button", { type: "button", class: "btn", text: "Go back" });
-    const form = el("form", { method: "dialog", class: "form" }, el("h2", { id: "confirm-title", text: a.label }), el("p", { class: "says", text: spec.says }), ...spec.fields, el("p", { class: "muted", text: "Equivalent command:" }), el("code", { class: "cli", text: a.cli }), errorBox, el("div", { class: "row end" }, back, go));
-    const dlg = el("dialog", { class: "confirm glass", "aria-labelledby": "confirm-title" }, form);
+    const form = el("form", { method: "dialog", class: "form" }, el("h2", { id: "confirm-title", text: a.label }), el("p", { class: "says", text: spec.says }), ...spec.fields, el("p", { class: "muted", text: "Agent equivalent (CLI)" }), el("code", { class: "cli", text: a.cli }), el("p", { class: "muted", text: "This console action records channel console with your verified identity." }), errorBox, el("div", { class: "row end" }, back, go));
+    const dlg = el("dialog", { class: "confirm", "aria-labelledby": "confirm-title" }, form);
     const close = () => { dlg.close(); dlg.remove(); };
     back.addEventListener("click", close);
     dlg.addEventListener("cancel", () => window.setTimeout(() => dlg.remove(), 0));
@@ -490,7 +499,7 @@
         button,
         a.warning && a.id === "edit" && el("p", { class: "muted", text: a.warning }),
         a.refusal && el("p", { class: "reason" }, el("span", { class: "code mono", text: a.refusal.code }), ` ${a.refusal.message} `, el("strong", { text: "What to do: " }), a.refusal.next),
-        el("p", { class: "muted", text: "Equivalent command:" }),
+        el("p", { class: "muted", text: "Agent equivalent (CLI)" }),
         el("code", { class: "cli", text: a.cli }));
     });
     return section("Actions", ...(rows.length ? rows : [el("p", { class: "muted", text: "This post is closed, so there is nothing to do." })]));
@@ -644,6 +653,18 @@
     $("prev").addEventListener("click", () => step(-1));
     $("next").addEventListener("click", () => step(1));
     $("today").addEventListener("click", () => { state.date = today(); load(); });
+    $("scrim").addEventListener("click", closePanel);
+    const toggle = $("needs-toggle");
+    const collapse = (on) => {
+      toggle.setAttribute("aria-expanded", String(!on));
+      $("needs").hidden = on;
+    };
+    try { collapse(localStorage.getItem(NEEDS_KEY) === "collapsed"); } catch (err) { collapse(false); }
+    toggle.addEventListener("click", () => {
+      const on = toggle.getAttribute("aria-expanded") === "true";
+      collapse(on);
+      try { localStorage.setItem(NEEDS_KEY, on ? "collapsed" : "open"); } catch (err) { /* not remembered */ }
+    });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !document.querySelector("dialog[open]")) closePanel(); });
   }
 

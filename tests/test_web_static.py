@@ -177,6 +177,62 @@ def test_the_sticky_bar_does_not_hide_keyboard_focus() -> None:
     assert re.search(r"html\s*\{[^}]*scroll-padding-top:\s*\d+px", text("app.css"))
 
 
+def rule(selector: str) -> str:
+    match = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", text("app.css"))
+    assert match, selector
+    return match.group(1)
+
+
+def test_text_sizes_are_rem_based_with_no_px_font_sizes() -> None:
+    css = text("app.css")
+    assert not re.search(r"font-size:\s*[\d.]+px", css)
+    assert re.search(r"html\s*\{[^}]*font-size:\s*87\.5%", css)
+    assert re.search(r'html\s*\{[^}]*font-family:\s*"Inter",\s*system-ui', css)
+
+
+def test_glass_is_a_24px_blur_with_a_72_percent_fill() -> None:
+    assert rule(".glass").count("blur(24px)") == 2
+    for selector in (":root", ':root[data-theme="dark"]'):
+        assert re.search(r"--panel-glass:\s*rgba\([^)]*,\s*0\.72\)", rule(selector)), selector
+    assert "backdrop-filter: none" in re.search(
+        r"@media \(prefers-reduced-transparency: reduce\)\s*\{(.*?)\n\}", text("app.css"), re.S
+    ).group(1)  # type: ignore[union-attr]
+
+
+def test_the_entrance_is_subtle_and_reduced_motion_fades_only() -> None:
+    css = text("app.css")
+    keyframes = re.search(r"@keyframes rise\s*\{(.*?)\}\s*to", css, re.S)
+    assert (
+        keyframes and "translateY(4px)" in keyframes.group(1) and "blur(2px)" in keyframes.group(1)
+    )
+    assert "250ms" in rule(".enter .rise")
+    fade = re.search(r"@keyframes rise-fade\s*\{(.*?)\}\s*\}", css, re.S)
+    assert fade and "transform" not in fade.group(1) and "filter" not in fade.group(1)
+    reduced = re.search(r"@media \(prefers-reduced-motion: reduce\)\s*\{(.*?)\n\}", css, re.S)
+    assert reduced and "animation: rise-fade" in reduced.group(1)
+    assert "animation: none" not in reduced.group(1)
+
+
+def test_the_needs_strip_is_a_collapsible_button() -> None:
+    html = text("index.html")
+    button = re.search(r'<button\b[^>]*id="needs-toggle"[^>]*>', html)
+    assert (
+        button
+        and 'aria-expanded="true"' in button.group(0)
+        and 'aria-controls="needs"' in button.group(0)
+    )
+    assert 'id="needs"' in html and "localStorage" in text("app.js")
+
+
+def test_the_panel_sits_beside_the_grid_from_1200px_and_over_a_scrim_below() -> None:
+    css = text("app.css")
+    assert re.search(
+        r"@media \(min-width: 1200px\)\s*\{[^@]*main\s*\{\s*padding-right:\s*calc\(var\(--panel",
+        css,
+    )
+    assert 'id="scrim"' in text("index.html")
+
+
 def test_unexpected_errors_are_a_json_500_without_detail(
     client: Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
