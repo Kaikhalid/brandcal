@@ -268,7 +268,7 @@ def test_bad_query_is_a_refusal(env: Env) -> None:
 
 
 def test_non_api_paths_are_404(env: Env) -> None:
-    for path in ("/", "/index.html", "/static/app.js", "/api", "/api/unknown"):
+    for path in ("/static/app.js", "/api", "/api/unknown"):  # "/" is the page since U2
         res = env.client.get(path)
         assert res.status == 404 and res.code == "NOT_FOUND", path
 

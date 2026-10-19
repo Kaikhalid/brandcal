@@ -125,6 +125,9 @@ class ErrorCode(StrEnum):
     EXTRA_NOT_INSTALLED = "EXTRA_NOT_INSTALLED"
     """An optional extra this feature needs (cryptography for Access JWTs) is not installed."""
 
+    INTERNAL = "INTERNAL"
+    """An unexpected fault in `brandcal serve`; the reply carries no detail (HTTP 500)."""
+
 
 EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.TIME_OFFSET_REQUIRED: ExitCode.VALIDATION,
@@ -160,6 +163,7 @@ EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.BAD_ORIGIN: ExitCode.NOT_ALLOWED,
     ErrorCode.REASON_REQUIRED: ExitCode.VALIDATION,
     ErrorCode.EXTRA_NOT_INSTALLED: ExitCode.USAGE,
+    ErrorCode.INTERNAL: ExitCode.BAD_STATE,  # exit 1 stays reserved for a crash; HTTP status is 500
 }
 """Exit code for each error code. TODO: add the remaining codes as commands land."""
 

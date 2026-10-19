@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>brandcal</title>
+  <script src="/theme.js"></script>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the calendar</a>
+  <div id="banner" class="banner" role="status" hidden></div>
+
+  <header class="bar glass">
+    <div class="bar-row">
+      <h1 class="brand">brandcal</h1>
+      <fieldset class="seg">
+        <legend class="sr">View</legend>
+        <label><input type="radio" name="view" value="week" checked><span>Week</span></label>
+        <label><input type="radio" name="view" value="month"><span>Month</span></label>
+      </fieldset>
+      <div class="nav">
+        <button type="button" class="icon-btn" id="prev" aria-label="Previous"><svg class="icon" aria-hidden="true" focusable="false"><use href="#ui-prev"/></svg></button>
+        <button type="button" class="btn" id="today">Today</button>
+        <button type="button" class="icon-btn" id="next" aria-label="Next"><svg class="icon" aria-hidden="true" focusable="false"><use href="#ui-next"/></svg></button>
+      </div>
+      <h2 class="range num" id="range" aria-live="polite"></h2>
+      <p class="muted who" id="who"></p>
+      <fieldset class="seg" id="theme-switch">
+        <legend class="sr">Theme</legend>
+        <label><input type="radio" name="theme" value="system"><span><svg class="icon" aria-hidden="true" focusable="false"><use href="#ui-system"/></svg>System</span></label>
+        <label><input type="radio" name="theme" value="light"><span><svg class="icon" aria-hidden="true" focusable="false"><use href="#ui-sun"/></svg>Light</span></label>
+        <label><input type="radio" name="theme" value="dark"><span><svg class="icon" aria-hidden="true" focusable="false"><use href="#ui-moon"/></svg>Dark</span></label>
+      </fieldset>
+    </div>
+    <div class="bar-row filters" id="filters" aria-label="Filters"></div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section id="error" class="refusal" role="alert" hidden></section>
+    <section id="needs" class="needs" aria-label="Needs you"></section>
+    <section id="calendar" class="calendar" aria-label="Calendar"></section>
+  </main>
+
+  <aside id="panel" class="panel glass" data-open="false" role="dialog" aria-labelledby="panel-title" aria-hidden="true" inert></aside>
+</body>
+</html>

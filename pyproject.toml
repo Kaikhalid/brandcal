@@ -26,6 +26,7 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10"]
 crypto = ["cryptography>=42"]
+ui-test = ["playwright>=1.45"]
 
 [project.scripts]
 brandcal = "brandcal.cli:main"
@@ -39,6 +40,8 @@ path = "src/brandcal/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/brandcal"]
+# The web views are package data: they must ship in the wheel (served from brandcal/web/).
+artifacts = ["src/brandcal/web/*.html", "src/brandcal/web/*.css", "src/brandcal/web/*.js", "src/brandcal/web/*.svg"]
 
 [tool.ruff]
 line-length = 100
