@@ -51,14 +51,28 @@ after reading `cli.py`), and the CLI calls it too, so both front ends share one 
 | Request changes | `brandcal request-changes ID ... --what --where --instruction` | `actions.request_changes` | approver | flags new |
 | Change time only | `brandcal reschedule ID --window W ...` | `actions.reschedule` | approver | channel new |
 | Cancel | `brandcal cancel ID --kind K --reason R` | `actions.cancel` | approver | channel new |
-| Edit text | `brandcal edit ID field=value ...` | `actions.edit` | approver (UI only), writer, manager | actor rule new |
-| Submit after requested changes | `brandcal submit ID` | `actions.submit` | approver (UI only), writer, manager | actor rule new |
-| Add a note | `brandcal note ID "..."` | `actions.note` | any writer-capable viewer | no |
+| Edit text | `brandcal edit ID field=value ...` | `actions.edit` | approver (UI only); writer, manager (CLI only) | actor rule new |
+| Submit after requested changes | `brandcal submit ID` | `actions.submit` | approver (UI only); writer, manager (CLI only) | actor rule new |
+| Add a note | `brandcal note ID "..."` | `actions.note` | approver (UI only); writer, manager (CLI only) | actor rule new |
 | Serve the UI | `brandcal serve` | `serve.main` | admin | **yes** |
 
 Not in the UI: `begin`, `published`, `failed`, `schedule`, `unschedule`, `add`, media upload,
 `sweep`, backup, export, archive run, migrate. Those stay with agents and the admin. The UI
 shows their results (live URL, claim, native schedule) read-only.
+
+**Which surface each role uses (decision 8).** One surface per role, so there is never a
+choice to make:
+
+| Role | Surface | Writes |
+|---|---|---|
+| approver (a human) | UI only, with a verified Access identity | approve, request changes, change time, cancel, edit, submit, note |
+| viewer (a human) | UI only, with a verified Access identity | none (read-only) |
+| writer, manager, admin, system (agents) | CLI only, `--as NAME` | as SPEC 6.1 and 8.1; the UI never acts for them |
+
+The CLI keeps refusing the approver role on every command (`ROLE_NOT_ALLOWED`). The UI
+never accepts `--as`-style names; dev mode (2.5) is read-only. The asymmetry is deliberate:
+the human edits in the UI, agents edit through the CLI, and both reach the same
+`actions.edit`, the same version rules and the same events.
 
 ### 1.3 Refusals
 
@@ -123,7 +137,7 @@ All responses are JSON in the CLI shape; every request is authenticated (2.3).
 
 | Method and path | Action |
 |---|---|
-| `GET /api/session` | identity, role, source (`access-jwt`, `trusted-header`, `dev-unverified`), CSRF token |
+| `GET /api/session` | identity, role, source (`access-jwt` or `dev-unverified`), CSRF token |
 | `GET /api/schema` | rules and config for the UI (1.4) |
 | `GET /api/posts?from=&to=&status=&platform=&closed=` | list |
 | `GET /api/posts/ID` | post, parts, media, approvals, `actions` |
@@ -135,18 +149,13 @@ Write bodies are JSON and always carry `version`, `hash` and `window` as the UI 
 
 ### 2.3 Identity
 
-Reads and writes both need a verified identity. The server obtains it in one of two modes,
-set in config:
+Reads and writes both need a verified identity. There is one way to get it (decision 5):
 
-1. **`access-jwt` (recommended).** Read `Cf-Access-Jwt-Assertion`. Check the signature
+- **Access JWT.** Read `Cf-Access-Jwt-Assertion`. Check the signature
    against the team's JWKS (`https://TEAM_DOMAIN/cdn-cgi/access/certs`, cached, refreshed on
    an unknown `kid`), then `aud` equals the configured audience, `iss` equals
    `https://TEAM_DOMAIN`, `exp` and `nbf` hold (60 s leeway), `alg` is `RS256` only (never
-   `none` or `HS256`). The identity is the `email` claim.
-2. **`trusted-header`.** Read a configured header (for example `X-Auth-Email`) set by a
-   reverse proxy the owner controls. Weaker: any local process can forge the header, so use
-   it only when the proxy is the sole route to the port. The server logs this mode at start
-   and shows it in `GET /api/session`.
+   `none` or `HS256`). The identity is the `email` claim. No other header, cookie or proxy mode is accepted.
 
 The email is then looked up in `serve.approvers` (email to approver agent id) or
 `serve.viewers` (read-only). An email in neither list: `IDENTITY_UNMAPPED`. No header or a
@@ -157,38 +166,33 @@ client-supplied names.
 
 | Exit | Code | Meaning |
 |---|---|---|
-| 4 | `IDENTITY_UNVERIFIED` | No valid verified identity on this request (no or bad token, or dev mode used for a decision). `next`: sign in through Cloudflare Access, or ask the admin to check `serve.identity`. |
+| 4 | `IDENTITY_UNVERIFIED` | No valid verified identity on this request (no or bad token, or any write in dev mode). `next`: sign in through Cloudflare Access, or ask the admin to check `serve.identity`. |
 | 4 | `IDENTITY_UNMAPPED` | The identity is verified but not listed as an approver or viewer. `next`: ask the admin to add it to `serve.approvers`. |
 | 4 | `BAD_ORIGIN` | A write came from an origin or host that is not allowed (2.7). |
 | 3 | `REASON_REQUIRED` | Request changes needs `what`, `where` and `instruction` (4.2). |
 
-### 2.4 JWT signature check: stdlib or extra
+### 2.4 JWT signature check
 
-RS256 verification is only a public-key operation (`pow(signature, e, n)` and a comparison),
-so it **is feasible with the standard library**: parse the JWK `n` and `e`, compute the
-modular exponentiation, and compare the result to the exact expected EMSA-PKCS1-v1_5 block
-(a fixed SHA-256 prefix plus the digest), never parsing the padding. No secret is involved,
-so timing is not a concern. The risk is a hand-rolled check subtly accepting a forged
-signature.
-
-**Decision:** use the optional `cryptography` extra, which SPEC 7.5 already names, for
-`access-jwt` mode. Without it, `serve` in that mode exits 2 with `EXTRA_NOT_INSTALLED`, as
-signing commands do. `trusted-header` and `--dev-unverified` need no extra. No required
-dependency is added. If the owner prefers zero extras, the stdlib route is acceptable with a
-test suite of known-good and forged tokens (open question 1).
+RS256 verification uses the optional `cryptography` extra, which SPEC 7.5 already names
+(decision 1). There is no stdlib RS256 fallback. Without the extra, `serve` refuses to start
+in verified mode with `EXTRA_NOT_INSTALLED` (exit 2) and an explained message: "Access JWT
+verification needs the cryptography extra; install the crypto extra, or use --dev-unverified
+for a local, read-only session". U1 adds the optional extra
+`crypto = ["cryptography"]` to `pyproject.toml` (T15 reuses it). No required dependency is added. `--dev-unverified` needs no
+extra.
 
 ### 2.5 Local dev mode
 
-`brandcal serve --dev-unverified --as NAME` skips identity checks and acts as the agent
-NAME from the config (the same honour system as the CLI).
+`brandcal serve --dev-unverified` skips identity checks for **reads only**. It is for local
+development of the views.
 
 - Printed warning at start; a permanent red "UNVERIFIED (dev)" banner in every view.
 - `GET /api/session` reports source `dev-unverified`.
 - Every event and edit it causes records `"identity_source":"dev-unverified"`.
-- It may do what the CLI `--as NAME` may do for that agent's role (writer or manager
-  actions). It **can never approve, request changes, reschedule or cancel as the approver**:
-  those return `IDENTITY_UNVERIFIED`. A human decision with no verified human is the exact
-  failure this tool exists to prevent, so there is no exception.
+- Every write (approve, request changes, change time, cancel, edit, submit, note) returns
+  `IDENTITY_UNVERIFIED`. A human decision with no verified human is the exact failure this
+  tool exists to prevent, and agents write through the CLI (1.2), so there is no exception.
+  Write paths are tested with locally signed test JWTs instead.
 - It requires the flag every time; no config key enables it.
 
 ### 2.6 Config keys
@@ -200,10 +204,8 @@ override `serve.port`):
 |---|---|
 | `serve.port` | Port on 127.0.0.1; required |
 | `serve.allowed_origins` | List of exact origins, for example `["https://brandcal.example.com"]`; required for writes |
-| `serve.identity.mode` | `access-jwt` or `trusted-header` |
 | `serve.identity.team_domain` | For example `example.cloudflareaccess.com` |
 | `serve.identity.audience` | The Access application AUD tag |
-| `serve.identity.header` | Header name, `trusted-header` mode only |
 | `serve.identity.jwks_cache_minutes` | JWKS cache lifetime |
 | `serve.approvers` | `{"approver@example.com": "approver-1"}`; the agent must have role `approver` |
 | `serve.viewers` | List of emails with read-only access |
@@ -228,7 +230,8 @@ override `serve.port`):
 2. Create a Cloudflare Tunnel with an ingress rule from `brandcal.example.com` to
    `http://127.0.0.1:PORT`.
 3. Create an Access application for `brandcal.example.com`; policy: allow only the approver
-   and viewer emails, require your identity provider's MFA. Copy the AUD tag and the team
+   and viewer emails, require your identity provider's MFA, and set the session duration to
+   24 hours for approvers (decision 6; a Cloudflare setting, not brandcal's). Copy the AUD tag and the team
    domain into `serve.identity`.
 4. Add `https://brandcal.example.com` to `serve.allowed_origins`.
 5. Check: open the site signed in (session shows your email), and call the tunnel URL with no
@@ -245,7 +248,7 @@ SPEC 7.1 has two channels, `card` and `writer-session`. A third, **`console`**, 
 made by the verified approver in the UI. Each such approval records:
 
 - `decided_by`: the approver agent mapped from the verified email;
-- the **verified identity** (email) and its **source** (`access-jwt` or `trusted-header`);
+- the **verified identity** (email) and its **source** (`access-jwt`);
 - `source_message_id`: the button id (for example `console-approve`), `approver_words`: the
   button label, plus the structured reason for request-changes (4.2);
 - `content_version`, `content_hash` and `window` exactly as sent by the UI;
@@ -259,7 +262,7 @@ rows, ids and the triggers, and be tested on a populated database):
 
 - channel CHECK becomes `('card','writer-session','legacy','console')`;
 - new columns `verified_identity TEXT` and `identity_source TEXT`, both required when
-  channel is `console`, and CHECKed to `access-jwt` or `trusted-header` (never
+  channel is `console`, and CHECKed to `access-jwt` (never
   `dev-unverified`);
 - the existing triggers that require `recorded_by` and `relayed_by` to be a manager or writer
   are relaxed **only for channel `console`**: both must be the configured `console` agent
@@ -285,12 +288,13 @@ harmless: the second attempt hits `BAD_TRANSITION` or the idempotent path.
 | 2. Only the manager records decisions | **Amended:** the server records a console decision, acting on a verified human, through the `console` recorder agent. The manager never relays a console decision and cannot create one (the channel needs a verified identity) |
 | 3. Relayed approvals produce a receipt | **Not needed for console**: no one relays, and the approver saw the exact text, fingerprint and window on screen when they pressed the button. The on-screen confirmation (with fingerprint and window) and the audit event replace the receipt |
 | 4. Version and hash bind; window binds time | Unchanged |
-| 5. `begin` re-checks | Unchanged; also refuses a console approval that lacks a verified identity (`STALE_APPROVAL`) |
+| 5. `begin` re-checks | Unchanged; also refuses a console approval that lacks a verified identity (`IDENTITY_UNVERIFIED`, decision 7) |
 | 6. `audit` | Extended as in 3.2 |
 | 7. Manager compares live accounts | Unchanged |
 
 New risk: a compromised Access session can approve. Mitigations are Access MFA, short Access
-session length, the identity recorded on every approval, and signing (open question 4).
+a 24-hour Access session, and the identity recorded on every approval. Console approvals are
+not signed: the Access identity is the proof, and signing stays with T15 (decision 4).
 
 ### 3.5 Conflicts with existing SPEC rules, resolved
 
@@ -298,9 +302,9 @@ session length, the identity recorded on every approval, and signing (open quest
 |---|---|
 | "Only the manager records decisions" (SPEC 7.3.2, 7.4) | Kept for `card` and `writer-session`. For `console` the server records on a verified human's behalf (3.4). Update SPEC 7.3 by cross-reference only |
 | The approver role has no commands (AGENTS.md) | The CLI still has none: `approver` stays `ROLE_NOT_ALLOWED` on every CLI command. The approver's actions exist only through `serve` with a verified identity, using the same core functions. Role lists in `transitions` gain `approver` for the rows the UI can perform |
-| Self-declared `--as NAME` | Unchanged for the CLI. The UI does not use it, except dev mode, which is barred from decisions (2.5) |
+| Self-declared `--as NAME` | Unchanged for the CLI. The UI never uses it; dev mode is read-only (2.5) |
 | System role never approves (SPEC 6.1) | The `console` agent has role `system` but only records; the deciding actor is the approver and the trigger enforces it (3.2) |
-| Edits belong to writer and manager | A human approver may edit through the UI (4.1); the CLI `edit` still refuses the approver role |
+| Edits belong to writer and manager | Agents still edit through the CLI only. Only the human approver edits in the UI (4.1, decision 3); the CLI `edit` still refuses the approver role |
 | Cards and buttons are sent by the manager | Console buttons need no card; the card flow remains for chat channels |
 
 ---
@@ -309,7 +313,7 @@ session length, the identity recorded on every approval, and signing (open quest
 
 ### 4.1 Editing
 
-The approver (or writer and manager in dev mode) can edit text, first comment, target URL,
+Only the verified approver can edit in the UI (agents edit through the CLI, 1.2): text, first comment, target URL,
 alt text and window from the post panel, through `actions.edit`.
 
 - A content edit makes a **new version** under the existing rules: status returns to
@@ -449,17 +453,17 @@ assumed. Font: system stack, no web fonts, no external requests of any kind.
   same result and events as the CLI command), every refusal code and its `next`, JWT checks
   against locally generated RSA keys (good, wrong `aud`, wrong `iss`, expired, `alg=none`,
   unknown `kid`, bad signature), `IDENTITY_UNMAPPED`, Origin, Host, CSRF and content-type
-  checks, no CORS headers, dev mode barred from decisions, `STALE_APPROVAL` on an outdated view,
+  checks, no CORS headers, dev mode read-only, `STALE_APPROVAL` on an outdated view,
   the console migration on a populated database, and `audit` on console approvals.
 - **Playwright screenshot tests:** pages are rendered against clearly fake demo data (Example
   Co, `example.com`) generated by a script into a temporary home, with the server using a
   stubbed test identity (no dev banner). Views: Needs you, week, month, post panel for each state, a
   refusal, a stale-view reload, reduced-transparency and dark variants. Baselines are compared
   with a small pixel tolerance and uploaded as CI artefacts.
-- **Playwright is a development and CI-only dependency and needs the owner's approval before
-  it is added** (as `pyproject.toml` optional group `ui-test`). CI installs it with
+- **Playwright is a development and CI-only dependency (approved, decision 2)**, added as `pyproject.toml` optional group `ui-test`). CI installs it with
   `pip install -e ".[dev,ui-test]"` then `playwright install --with-deps chromium`, in a
-  separate job that does not gate the main checks until the owner agrees. Nothing is
+  separate job. The API tests run in the main pytest job and block merges. The screenshot job
+  is advisory until U4 lands, then it blocks merges too (decision 2). Nothing is
   downloaded at runtime by brandcal.
 - **Privacy scan stays in CI** and covers `docs/`, `src/brandcal/web/` and the screenshot
   baselines' source data (no real names, emails, domains or media).
@@ -488,7 +492,11 @@ Files: `src/brandcal/actions.py` (new), `src/brandcal/cli.py`, `src/brandcal/ser
 6. Write endpoints call the actions and return the CLI JSON; HTTP status follows 1.3.
 7. New error codes are in `errors.py` and ERRORS.md.
 8. `GET /api/posts/ID` returns `actions` per 1.5 with disabled reasons.
-9. For this task identity is a test stub only; the production check is U4.
+9. Identity: Access JWT verification per 2.3 and 2.4 (`EXTRA_NOT_INSTALLED` at start when
+   the extra is missing), `IDENTITY_UNVERIFIED` and `IDENTITY_UNMAPPED`, and read-only
+   `--dev-unverified` per 2.5. Every write without a verified identity is refused, tested per
+   endpoint with locally signed test JWTs.
+10. `begin` refuses a console approval without a verified identity with `IDENTITY_UNVERIFIED`.
 
 ### U2. Read-only views
 
@@ -523,26 +531,28 @@ Files: `src/brandcal/identity.py` (new), `src/brandcal/serve.py`, `docs/DEPLOY_U
 `pyproject.toml` (only with the owner's approval), `tests/test_identity.py`, `tests/ui/`,
 `scripts/make_demo_home.py`, CI workflow.
 
-1. `access-jwt` verification as in 2.3 and 2.4, with `EXTRA_NOT_INSTALLED` when missing.
-2. `trusted-header` mode; `IDENTITY_UNVERIFIED` and `IDENTITY_UNMAPPED` on every path.
+1. Access JWT verification (from U1) reviewed against a real Access application on a test
+   account; JWKS refresh on an unknown `kid`.
+2. `IDENTITY_UNVERIFIED` and `IDENTITY_UNMAPPED` on every UI path.
 3. Origin, Host, CSRF and content-type checks per 2.7.
-4. Console approvals refuse any identity source other than the two verified ones.
+4. Console approvals refuse any identity source other than `access-jwt`.
 5. `DEPLOY_UI.md` holds the generic tunnel and Access steps (fake hosts only).
-6. Playwright tests and demo-data script per section 7, in a separate CI job.
+6. Playwright tests and demo-data script per section 7; the screenshot job becomes blocking.
 7. Privacy scan and the five standard checks pass.
 
 ---
 
-## 9. Open questions for the owner
+## 9. Decisions (19 Oct 2026)
 
-1. **JWT verification:** use the `cryptography` extra (proposed) or a stdlib RS256 check with
-   forged-token tests, for zero extras?
-2. **Playwright:** approve it as a dev/CI-only dependency, and should the screenshot job gate
-   merges?
-3. **Who may edit in the UI:** only the approver (proposed), or also a viewer list with the
-   writer role?
-4. **Signed approvals (SPEC 7.5):** should console approvals be signed, and if so, where does
-   the server keep the private key (the manager holds it today)?
-5. **Trusted-header mode:** keep it, or allow only Access JWT?
-6. **Session length** of the Access application for approvers (short is safer; a Cloudflare
-   setting, not brandcal's).
+1. **JWT verification** uses the optional `cryptography` extra. Without it, `serve` refuses to
+   start in verified mode with an explained `EXTRA_NOT_INSTALLED`. No stdlib RS256.
+2. **Playwright** is a CI-only dev dependency. The API tests block merges; the screenshot job
+   is advisory until U4, then it blocks.
+3. **Only the approver edits in the UI.** Agents keep editing through the CLI (1.2, 4.1).
+4. **Console approvals are not signed.** The Access identity is the proof; signing stays
+   with T15.
+5. **Access JWT only.** There is no trusted-header mode.
+6. **Session length** is a Cloudflare setting; the docs recommend 24 hours for approvers.
+7. **`begin`** on a console approval without a verified identity raises
+   `IDENTITY_UNVERIFIED`, not `STALE_APPROVAL`.
+8. **The CLI keeps refusing the approver role**; each role uses one surface (1.2).
