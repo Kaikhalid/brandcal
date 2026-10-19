@@ -63,7 +63,7 @@ jobs:
       - name: The committed build is current
         run: |
           git add --intent-to-add src/brandcal/web_next
-          if ! git diff --exit-code -- src/brandcal/web_next; then
+          if ! git diff --exit-code -- src/brandcal/web_next || [ -n "$(git status --porcelain --ignored -- src/brandcal/web_next)" ]; then
             echo "::error::src/brandcal/web_next is stale. Run python scripts/build_ui.py and commit the result."
             exit 1
           fi

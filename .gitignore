@@ -22,6 +22,8 @@ htmlcov/
 backups/
 archive/
 media/
+# ...but the built UI's fonts and icons live in a folder Next calls media
+!src/brandcal/web_next/_next/static/media/
 
 # Secrets and local config
 .env
