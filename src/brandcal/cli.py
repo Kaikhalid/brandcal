@@ -23,6 +23,7 @@ from brandcal import (
     posts,
     publish,
     reports,
+    serve,
     sweep,
     timefmt,
 )
@@ -124,6 +125,11 @@ COMMANDS: dict[str, tuple[str, list[str], list[str]]] = {
         ["NO_FRESH_BACKUP", "CLAIMED", "BAD_ARGS", "ROLE_NOT_ALLOWED", "NOT_FOUND"],
     ),
     "init": ("", ["admin"], ["NO_AGENT", "ROLE_NOT_ALLOWED", "HOME_NOT_CONFIGURED"]),
+    "serve": (
+        "[--port N] [--dev-unverified]",
+        ["admin"],
+        ["BAD_ARGS", "NO_AGENT", "ROLE_NOT_ALLOWED", "EXTRA_NOT_INSTALLED"],
+    ),
     "migrate": (
         "FILE [--dry-run] [--out FILE] [--owner NAME]",
         ["admin"],
@@ -273,6 +279,9 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "search":
             read_p.add_argument("text")
         read_p.add_argument("--month", required=True)
+    serve_p = sub.add_parser("serve", parents=[common], add_help=False)
+    serve_p.add_argument("--port", type=int)
+    serve_p.add_argument("--dev-unverified", action="store_true")
     migrate_p = sub.add_parser("migrate", parents=[common], add_help=False)
     migrate_p.add_argument("file")
     migrate_p.add_argument("--dry-run", action="store_true")
@@ -632,6 +641,18 @@ def cmd_archive(args: argparse.Namespace) -> dict[str, object]:
         return out
 
 
+def cmd_serve(args: argparse.Namespace) -> dict[str, object]:
+    """Serve the web UI's JSON API on 127.0.0.1 (UI_SPEC 2.1); runs until interrupted."""
+    base = cfgmod.home(args.home)
+    cfg = cfgmod.load_config(base)
+    if actor(args, cfg)[1] != "admin":
+        raise BrandcalError(ErrorCode.ROLE_NOT_ALLOWED, "Only an admin may run serve.")
+    cfgmod.display_tz(cfg)
+    if not (base / "brand.db").is_file():
+        raise BrandcalError(ErrorCode.BAD_ARGS, "No brand.db here.", "Run: brandcal init")
+    return serve.run(base, cfg, args.port, args.dev_unverified)
+
+
 def cmd_migrate(args: argparse.Namespace) -> dict[str, object]:
     with _session(args) as s:
         if s.role != "admin":
@@ -654,6 +675,7 @@ def cmd_migrate(args: argparse.Namespace) -> dict[str, object]:
 
 
 COMMAND_FUNCS = {
+    "serve": cmd_serve,
     "archive": cmd_archive,
     "migrate": cmd_migrate,
     "export": cmd_export,
