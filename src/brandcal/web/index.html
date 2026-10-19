@@ -40,10 +40,15 @@
 
   <main id="main" tabindex="-1">
     <section id="error" class="refusal" role="alert" hidden></section>
-    <section id="needs" class="needs" aria-label="Needs you"></section>
+    <p id="notice" class="notice" role="status"></p>
+    <section id="needs-wrap" class="needs-wrap" aria-label="Needs you">
+      <button type="button" id="needs-toggle" class="needs-toggle" aria-expanded="true" aria-controls="needs"><svg class="icon chev" aria-hidden="true" focusable="false"><use href="#ui-next"/></svg><span>Needs you</span><span id="needs-counts" class="needs-counts"></span></button>
+      <div id="needs" class="needs"></div>
+    </section>
     <section id="calendar" class="calendar" aria-label="Calendar"></section>
   </main>
 
+  <div id="scrim" class="scrim" aria-hidden="true"></div>
   <aside id="panel" class="panel glass" data-open="false" role="dialog" aria-labelledby="panel-title" aria-hidden="true" inert></aside>
 </body>
 </html>

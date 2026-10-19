@@ -30,7 +30,6 @@ Exit 0 is success and exit 1 is never used deliberately (it means an unexpected 
 | 5 | `BAD_TRANSITION` | This status change is not in the state machine (SPEC 6.1). |
 | 5 | `EDIT_WHILE_CLAIMED` | Edits are refused while the post is claimed for publishing. |
 | 5 | `EDIT_WHILE_SCHEDULED` | Content or window edits are refused while the post is natively scheduled. |
-| 5 | `INTERNAL` | An unexpected fault in `brandcal serve`; the reply carries no detail (HTTP 500). |
 | 5 | `NATIVELY_SCHEDULED` | The post is queued in the platform's own scheduler; unschedule it first. |
 | 5 | `NO_FRESH_BACKUP` | No verified backup exists for the required period. |
 | 5 | `POST_CLOSED` | The post is published or cancelled and can no longer be changed. |
@@ -42,3 +41,4 @@ Exit 0 is success and exit 1 is never used deliberately (it means an unexpected 
 | 8 | `CHECK_LIVE_FIRST` | A previous claim expired; confirm the post is not already live first. |
 | 8 | `CLAIMED` | The post is claimed for publishing by a manager. |
 | 8 | `URL_CONFLICT` | The post is already published with a different URL. |
+| 9 | `INTERNAL` | An unexpected fault in `brandcal serve`; the reply carries no detail (HTTP 500). |

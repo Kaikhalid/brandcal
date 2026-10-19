@@ -573,6 +573,7 @@ Error (to stdout, same shape always):
 | 6 | stale approval, hash mismatch, bad signature, unapproved time | `STALE_APPROVAL`, `HASH_MISMATCH`, `BAD_SIGNATURE`, `WINDOW_NOT_APPROVED` |
 | 7 | not found in the live calendar | `NOT_FOUND`, `ARCHIVED` |
 | 8 | conflict | `CLAIMED`, `URL_CONFLICT`, `CHECK_LIVE_FIRST` |
+| 9 | internal error | `INTERNAL` (an unexpected failure in `serve`; no traceback is returned) |
 
 Exit 1 is never used deliberately (it means an unexpected crash). Codes are stable: never
 renamed or reused. `ARCHIVED` includes the exact `archive show` command in `next`.

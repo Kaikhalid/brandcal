@@ -60,8 +60,9 @@ def bad_args(message: str, next_step: str = "") -> BrandcalError:
     return BrandcalError(ErrorCode.BAD_ARGS, message, next_step)
 
 
-def _require_role(role: str) -> None:
-    if role not in WRITE_ROLES:
+def _require_role(role: str, via: Mapping[str, object] | None = None) -> None:
+    """Writers and managers; the approver only with a verified console identity (``via``)."""
+    if role not in WRITE_ROLES and not (role == "approver" and via is not None):
         raise BrandcalError(
             ErrorCode.ROLE_NOT_ALLOWED,
             f"Role {role} may not change posts.",
@@ -163,6 +164,25 @@ def _event(
     )
 
 
+def content_snapshot(conn: sqlite3.Connection, post_id: str) -> dict[str, object]:
+    """The approvable content of the post as it is now; stored in the event that made it."""
+    p = load_post(conn, post_id)
+    parts = conn.execute("SELECT text FROM parts WHERE post_id = ? ORDER BY pos", (post_id,))
+    alts = conn.execute(
+        "SELECT m.alt_text FROM media m JOIN parts p ON p.id = m.part_id"
+        " WHERE p.post_id = ? ORDER BY p.pos, m.pos",
+        (post_id,),
+    )
+    return {
+        "version": p["content_version"],
+        "hash": p["content_hash"],
+        "parts": [r[0] for r in parts],
+        "first_comment": p["first_comment"],
+        "target_url": p["target_url"],
+        "alt_texts": [r[0] for r in alts],
+    }
+
+
 def _touch(conn: sqlite3.Connection, cfg: Mapping[str, Any], post_id: str) -> None:
     conn.execute("UPDATE posts SET updated_at = ? WHERE id = ?", (now_and_month(cfg)[0], post_id))
 
@@ -246,10 +266,10 @@ def add_post(
         content.refresh_hash(conn, post_id)
         errors, warnings = validate.validate(conn, post_id, platform_limits(conn), cfg, "add")
         raise_first(errors)
-        detail: dict[str, object] = {}
+        detail: dict[str, object] = {"snapshot": content_snapshot(conn, post_id)}
         if approver_confirmed:
-            detail = {"approver_confirmed": approver_confirmed, "words": words}
-        _event(conn, cfg, actor_id, "add", post_id, None, detail or None)
+            detail.update({"approver_confirmed": approver_confirmed, "words": words})
+        _event(conn, cfg, actor_id, "add", post_id, None, detail)
         result = post_result(
             conn, post_id, f"manager: send a card (brandcal preview {post_id})", []
         )
@@ -274,14 +294,27 @@ def _mutate(
     action: str,
     detail: dict[str, object],
     change: Callable[[], None],
+    via: Mapping[str, object] | None = None,
 ) -> Any:
-    """Run a content change in one transaction: change, rehash, event."""
-    _require_role(role)
+    """Run a content change in one transaction: change, rehash, event.
+
+    One save is one new version, however many fields it touched. The event keeps a snapshot of
+    the new content (``versions``) and, for a console edit, the verified identity (``via``).
+    """
+    _require_role(role, via)
     with transaction(conn):
-        before = _load_open(conn, post_id)["status"]
+        old = _load_open(conn, post_id)
+        before = old["status"]
         change()
         _touch(conn, cfg, post_id)
         content.refresh_hash(conn, post_id)
+        detail = {**detail, **(via or {})}
+        if load_post(conn, post_id)["content_version"] != old["content_version"]:
+            conn.execute(
+                "UPDATE posts SET content_version = ? WHERE id = ?",
+                (old["content_version"] + 1, post_id),
+            )
+            detail["snapshot"] = content_snapshot(conn, post_id)
         _event(conn, cfg, actor_id, action, post_id, before, detail)
         return post_result(
             conn, post_id, "manager: send a card (brandcal preview " + post_id + ")", []
@@ -295,8 +328,12 @@ def edit_post(
     cfg: Mapping[str, Any],
     post_id: str,
     assignments: Sequence[str],
+    parts: Mapping[int, str] | None = None,
+    alt_texts: Mapping[int, str] | None = None,
+    via: Mapping[str, object] | None = None,
 ) -> Any:
-    _require_role(role)
+    """Edit fields, part texts (by position) and alt texts (by media order) as one version."""
+    _require_role(role, via)
     values: dict[str, object] = {}
     tz = display_tz(cfg)
     for item in assignments:
@@ -318,8 +355,35 @@ def edit_post(
     def change() -> None:
         for field, value in values.items():
             conn.execute(f'UPDATE posts SET "{field}" = ? WHERE id = ?', (value, post_id))
+        ids = _part_ids(conn, post_id)
+        for pos, text in (parts or {}).items():
+            _check_pos(ids, pos)
+            if not text.strip():
+                raise bad_args(f"Part {pos} cannot be empty.", "Write the text of the part.")
+            conn.execute(
+                "UPDATE parts SET text = ? WHERE post_id = ? AND pos = ?", (text, post_id, pos)
+            )
+        media_ids = [
+            r[0]
+            for r in conn.execute(
+                "SELECT m.id FROM media m JOIN parts p ON p.id = m.part_id"
+                " WHERE p.post_id = ? ORDER BY p.pos, m.pos",
+                (post_id,),
+            )
+        ]
+        for number, alt in (alt_texts or {}).items():
+            if not 1 <= number <= len(media_ids):
+                raise bad_args(f"There is no media file {number}.", f"Use 1..{len(media_ids)}.")
+            if not alt.strip():
+                raise bad_args("Alt text cannot be empty.", "Describe the media file.")
+            conn.execute("UPDATE media SET alt_text = ? WHERE id = ?", (alt, media_ids[number - 1]))
 
-    return _mutate(conn, actor_id, role, cfg, post_id, "edit", {"fields": sorted(values)}, change)
+    detail: dict[str, object] = {"fields": sorted(values)}
+    if parts:
+        detail["parts"] = sorted(parts)
+    if alt_texts:
+        detail["alt_texts"] = sorted(alt_texts)
+    return _mutate(conn, actor_id, role, cfg, post_id, "edit", detail, change, via)
 
 
 def _part_ids(conn: sqlite3.Connection, post_id: str) -> list[int]:
@@ -455,7 +519,11 @@ def media_add(
     with transaction(conn):
         content.refresh_hash(conn, post_id)
         _touch(conn, cfg, post_id)
-        _event(conn, cfg, actor_id, "media_add", post_id, post["status"], {"media": row["id"]})
+        detail: dict[str, object] = {
+            "media": row["id"],
+            "snapshot": content_snapshot(conn, post_id),
+        }
+        _event(conn, cfg, actor_id, "media_add", post_id, post["status"], detail)
         return post_result(conn, post_id, f"brandcal check {post_id}", [])
 
 
@@ -468,6 +536,7 @@ def add_note(
     cfg: Mapping[str, Any],
     post_id: str,
     text: str,
+    via: Mapping[str, object] | None = None,
 ) -> Any:
     at = now_and_month(cfg)[0]
     with transaction(conn):
@@ -477,7 +546,7 @@ def add_note(
             " END, updated_at = ? WHERE id = ?",
             (line := f"{at} {actor_id}: {text}", line, at, post_id),
         )
-        _event(conn, cfg, actor_id, "note", post_id, status)
+        _event(conn, cfg, actor_id, "note", post_id, status, dict(via) if via else None)
         return post_result(conn, post_id, "", [])
 
 
@@ -517,7 +586,9 @@ def submit_post(
     role: str,
     cfg: Mapping[str, Any],
     post_id: str,
+    via: Mapping[str, object] | None = None,
 ) -> Any:
+    _require_role(role, via)
     with transaction(conn):
         post = load_post(conn, post_id)
         check_transition(post["status"], "pending_approval", role)
@@ -536,7 +607,7 @@ def submit_post(
         raise_first(errors)
         conn.execute("UPDATE posts SET status = 'pending_approval' WHERE id = ?", (post_id,))
         _touch(conn, cfg, post_id)
-        _event(conn, cfg, actor_id, "submit", post_id, post["status"])
+        _event(conn, cfg, actor_id, "submit", post_id, post["status"], dict(via) if via else None)
         out = post_result(conn, post_id, f"manager: send a card (brandcal preview {post_id})", [])
     out["warnings"] = warnings
     return out

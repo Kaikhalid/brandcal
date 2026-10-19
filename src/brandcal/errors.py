@@ -21,6 +21,7 @@ class ExitCode(IntEnum):
     APPROVAL_MISMATCH = 6
     NOT_FOUND = 7
     CONFLICT = 8
+    INTERNAL = 9
 
 
 class ErrorCode(StrEnum):
@@ -163,7 +164,7 @@ EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.BAD_ORIGIN: ExitCode.NOT_ALLOWED,
     ErrorCode.REASON_REQUIRED: ExitCode.VALIDATION,
     ErrorCode.EXTRA_NOT_INSTALLED: ExitCode.USAGE,
-    ErrorCode.INTERNAL: ExitCode.BAD_STATE,  # exit 1 stays reserved for a crash; HTTP status is 500
+    ErrorCode.INTERNAL: ExitCode.INTERNAL,  # exit 1 stays reserved for a crash; HTTP status is 500
 }
 """Exit code for each error code. TODO: add the remaining codes as commands land."""
 

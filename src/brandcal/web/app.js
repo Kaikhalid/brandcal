@@ -2,20 +2,11 @@
 // brandcal read-only views. All data comes from the JSON API; user text is only ever set with
 // textContent. The server decides buttons, limits and refusals; this file only draws them.
 (() => {
-  const NEEDS = ["pending_approval", "changes_requested", "missed"];
   const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const SVG_NS = "http://www.w3.org/2000/svg";
   const OFFSET = /^([+-])(\d{2}):?(\d{2})$/;
-  // The equivalent CLI line for each button id (the CLI cannot record console decisions).
-  const CLI = {
-    approve: (p) => `brandcal approve ${p.id} --version ${p.content_version} --hash ${p.content_hash.slice(0, 8)} --channel card --msg MSG_ID --words "APPROVER'S WORDS" --approver NAME --as NAME`,
-    "request-changes": (p) => `brandcal request-changes ${p.id} --version ${p.content_version} --hash ${p.content_hash.slice(0, 8)} --msg MSG_ID --words "APPROVER'S WORDS" --what "..." --where "..." --instruction "..." --approver NAME --as NAME`,
-    reschedule: (p) => `brandcal reschedule ${p.id} --version ${p.content_version} --hash ${p.content_hash.slice(0, 8)} --window "${p.window}" --msg MSG_ID --words "APPROVER'S WORDS" --approver NAME --as NAME`,
-    cancel: (p) => `brandcal cancel ${p.id} --kind idea --reason "WHY" --as NAME`,
-    edit: (p) => `brandcal edit ${p.id} FIELD=VALUE --as NAME`,
-    submit: (p) => `brandcal submit ${p.id} --as NAME`,
-  };
+  const KINDS = [["idea", "The idea is dropped"], ["version", "This version is dropped"], ["plan", "The plan is dropped"]];
 
   const root = document.documentElement;
   const $ = (id) => document.getElementById(id);
@@ -23,6 +14,7 @@
   const seen = new Set();
   let loadSeq = 0;
   let panelSeq = 0;
+  const NEEDS_KEY = "brandcal-needs";
   let opener = null;
 
   // ---- small helpers -------------------------------------------------------------------
@@ -59,17 +51,21 @@
   const pad = (n) => String(n).padStart(2, "0");
 
   class ApiError extends Error {
-    constructor(error, status) {
+    constructor(error, status, body = null) {
       super(error.message);
       this.error = error;
       this.status = status;
+      this.body = body;
     }
   }
 
-  async function getJson(path) {
+  // Writes carry the CSRF token the server bound to this identity (UI_SPEC 2.7).
+  const postJson = (path, payload) => getJson(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Brandcal-CSRF": state.session.csrf || "" }, body: JSON.stringify(payload) });
+
+  async function getJson(path, init = {}) {
     let res;
     try {
-      res = await fetch(path, { credentials: "same-origin" });
+      res = await fetch(path, { credentials: "same-origin", ...init });
     } catch {
       throw new ApiError({ code: "NO_REPLY", message: "The server did not answer.", next: "Check that brandcal serve is running, then reload." }, 0);
     }
@@ -81,7 +77,7 @@
     }
     if (!res.ok || !body || body.ok === false) {
       const error = body && body.error ? body.error : { code: `HTTP_${res.status}`, message: "The reply was not in the expected form.", next: "Reload; if it persists, tell the admin." };
-      throw new ApiError(error, res.status);
+      throw new ApiError(error, res.status, body);
     }
     return body;
   }
@@ -195,11 +191,12 @@
     const button = el("button", { type: "button", class: compact ? "card compact rise" : "card rise", data: { status: post.status, id: post.id }, title: post.window.replace("/", " to ") });
     if (state.post === post.id) button.setAttribute("aria-current", "true");
     if (compact) {
-      button.append(icon("status", post.status), el("span", { class: "when num", text: w.from }), el("span", { class: "title", text: post.title }));
+      button.append(icon("status", post.status), el("span", { class: "when num", text: w.from }), el("span", { class: "title", text: post.title, title: post.title }));
       button.setAttribute("aria-label", `${post.title}, ${words(post.status)}, ${post.platform}, ${kind}, ${w.text}`);
     } else {
       button.append(
-        el("span", { class: "row between" }, statusChip(post.status), el("span", { class: "when num", text: w.text })),
+        statusChip(post.status),
+        el("span", { class: "when num", text: w.text }),
         el("span", { class: "title", text: post.title }),
         el("span", { class: "row" }, platformTag(post.platform), kind && typeTag(kind), detail && badges(detail)),
       );
@@ -217,10 +214,13 @@
     });
   }
 
+  const needs = () => state.schema.needs_you.filter((s) => state.schema.states.includes(s));
+
   function renderNeeds() {
     const box = $("needs");
     box.replaceChildren();
-    NEEDS.filter((s) => state.schema.states.includes(s)).forEach((id, i) => {
+    $("needs-counts").replaceChildren(...needs().map((id) => el("span", { class: "cnt", data: { status: id } }, icon("status", id), words(id), el("span", { class: "num", text: String((state.needs[id] || []).length) }))));
+    needs().forEach((id) => {
       const list = state.needs[id] || [];
       const ul = el("ul", {});
       for (const p of list) {
@@ -243,7 +243,10 @@
       const key = addDays(from, i);
       const mine = posts.filter((p) => span(p.window).day === key);
       const head = el("h3", { class: "day-head" }, DAYS[dowOf(key)], el("span", { class: "num", text: String(parseDate(key)[2]) }));
-      if (key === today()) head.setAttribute("aria-current", "date");
+      if (key === today()) {
+        head.setAttribute("aria-current", "date");
+        head.append(el("span", { class: "today-tag", text: "Today" }));
+      }
       const col = el("section", { class: "col rise", data: { chunk: 1 + Math.floor(i / 2) }, "aria-label": dayLabel(key) }, head, ...mine.map((p) => card(p, state.details.get(p.id), false)));
       if (!mine.length) col.append(el("p", { class: "none", text: "Nothing planned." }));
       grid.append(col);
@@ -258,8 +261,11 @@
     DAYS.slice(1).concat(DAYS[0]).forEach((d) => grid.append(el("div", { class: "dow", text: d })));
     for (let key = from, n = 0; key <= to; key = addDays(key, 1), n++) {
       const mine = posts.filter((p) => span(p.window).day === key);
-      const cell = el("div", { class: "day rise", role: "group", "aria-label": dayLabel(key), data: { chunk: Math.floor(n / 7), outside: String(parseDate(key)[1] !== month) } }, el("span", { class: "num", text: String(parseDate(key)[2]) }));
-      if (key === today()) cell.setAttribute("aria-current", "date");
+      const cell = el("div", { class: "day rise", role: "group", "aria-label": dayLabel(key), data: { chunk: Math.floor(n / 7), outside: String(parseDate(key)[1] !== month) } }, el("div", { class: "day-top" }, el("span", { class: "num", text: String(parseDate(key)[2]) })));
+      if (key === today()) {
+        cell.setAttribute("aria-current", "date");
+        cell.firstChild.append(el("span", { class: "today-tag", text: "Today" }));
+      }
       mine.slice(0, 3).forEach((p) => cell.append(card(p, state.details.get(p.id), true)));
       if (mine.length > 3) {
         const more = el("button", { type: "button", class: "more", text: `+${mine.length - 3} more` });
@@ -293,7 +299,7 @@
     writeUrl();
     try {
       const [from, to] = range();
-      const wanted = NEEDS.filter((s) => state.schema.states.includes(s));
+      const wanted = needs();
       const [list, ...needLists] = await Promise.all([getJson(`/api/posts?${new URLSearchParams({ from, to, closed: "1" })}`), ...wanted.map((s) => getJson(`/api/posts?status=${s}`))]);
       const details = new Map();
       await Promise.all(list.posts.map(async (p) => details.set(p.id, await getJson(`/api/posts/${encodeURIComponent(p.id)}`))));
@@ -395,17 +401,144 @@
     })));
   }
 
+  // ---- write actions: every one goes through a confirm dialog ---------------------------------
+
+  const field = (label, control, hint) => el("label", { class: "field" }, el("span", { text: label }), control, hint && el("small", { class: "muted", text: hint }));
+  const seenBy = (post) => ({ version: post.content_version, hash: post.content_hash, window: post.window });
+  const short = (post) => `version ${post.content_version} (fingerprint ${post.content_hash.slice(0, 8)}) of "${post.title}"`;
+
+  // What each action asks for, what it will do, and the request it sends.
+  function formFor(a, post) {
+    const when = span(post.window).text;
+    const text = (name, value = "") => el("textarea", { name, rows: 3, required: true }, value);
+    switch (a.id) {
+      case "approve":
+        return { fields: [], says: `Approve ${short(post)}, to be published ${dayLabel(span(post.window).day)}, ${when}. The post can then be published inside that window.`, body: () => ({ ...seenBy(post) }) };
+      case "request-changes":
+        return { fields: [field("What is wrong", text("what")), field("Where it is", text("where")), field("What the writer should do", text("instruction"))], says: `Send ${short(post)} back to the writer. All three fields are required.`, body: (f) => ({ ...seenBy(post), what: f.what, where: f.where, instruction: f.instruction }) };
+      case "reschedule":
+        return { fields: [field("New window", el("input", { name: "new_window", type: "text", required: true, value: post.window, spellcheck: "false" }), state.schema.time_format)], says: `Change only the time of ${short(post)}. The text stays as approved.`, body: (f) => ({ ...seenBy(post), new_window: f.new_window }) };
+      case "cancel":
+        return { fields: [field("What is cancelled", el("select", { name: "kind" }, ...KINDS.map(([v, t]) => el("option", { value: v, text: `${words(v)}: ${t}` })))), field("Reason", text("reason"))], says: `Cancel "${post.title}". This closes the post and cannot be undone.`, danger: true, body: (f) => ({ ...seenBy(post), kind: f.kind, reason: f.reason }) };
+      case "submit":
+        return { fields: [], says: `Submit ${short(post)} for approval again.`, body: () => ({}) };
+      case "note":
+        return { fields: [field("Note", text("text"))], says: `Add a note to "${post.title}". It does not change the content.`, body: (f) => ({ text: f.text }) };
+      default: {
+        const first = (post.parts[0] || {}).text || "";
+        return {
+          fields: [
+            ...post.parts.map((p) => field(post.parts.length > 1 ? `Text, part ${p.pos}` : "Text", el("textarea", { name: `part-${p.pos}`, rows: 5, required: true }, p.text))),
+            field("First comment", el("textarea", { name: "first_comment", rows: 2 }, post.first_comment || "")),
+            field("Target URL", el("input", { name: "target_url", type: "text", value: post.target_url || "", spellcheck: "false" })),
+            ...post.media.map((m, i) => field(`Alt text, file ${i + 1}`, el("input", { name: `alt-${i + 1}`, type: "text", required: true, value: m.alt_text || "" }))),
+            field("Window", el("input", { name: "window", type: "text", required: true, value: post.window, spellcheck: "false" }), "Changing only the window needs no new approval."),
+          ],
+          says: `${a.warning} Saving never approves; you approve the new version as a separate step. (First text starts: "${first.slice(0, 40)}")`,
+          body: (f) => {
+            const fields = {};
+            for (const k of ["first_comment", "target_url", "window"]) if (f[k] !== (post[k] || "")) fields[k] = f[k];
+            const parts = {};
+            post.parts.forEach((p) => { if (f[`part-${p.pos}`] !== p.text) parts[p.pos] = f[`part-${p.pos}`]; });
+            const alt_texts = {};
+            post.media.forEach((m, i) => { if (f[`alt-${i + 1}`] !== (m.alt_text || "")) alt_texts[i + 1] = f[`alt-${i + 1}`]; });
+            return { fields, parts, alt_texts };
+          },
+        };
+      }
+    }
+  }
+
+  function confirmDialog(a, post, opener) {
+    const spec = formFor(a, post);
+    const errorBox = el("div", { class: "refusal", role: "alert", hidden: true });
+    const go = el("button", { type: "submit", class: spec.danger ? "btn primary danger" : "btn primary", text: a.id === "approve" ? `Approve version ${post.content_version}` : a.label });
+    const back = el("button", { type: "button", class: "btn", text: "Go back" });
+    const form = el("form", { method: "dialog", class: "form" }, el("h2", { id: "confirm-title", text: a.label }), el("p", { class: "says", text: spec.says }), ...spec.fields, el("p", { class: "muted", text: "Agent equivalent (CLI)" }), el("code", { class: "cli", text: a.cli }), el("p", { class: "muted", text: "This console action records channel console with your verified identity." }), errorBox, el("div", { class: "row end" }, back, go));
+    const dlg = el("dialog", { class: "confirm", "aria-labelledby": "confirm-title" }, form);
+    const close = () => { dlg.close(); dlg.remove(); };
+    back.addEventListener("click", close);
+    dlg.addEventListener("cancel", () => window.setTimeout(() => dlg.remove(), 0));
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!form.reportValidity()) return;
+      go.disabled = true;
+      go.setAttribute("aria-busy", "true");
+      const values = Object.fromEntries(new FormData(form).entries());
+      try {
+        const res = await postJson(`/api/posts/${encodeURIComponent(post.id)}/${a.id}`, spec.body(values));
+        close();
+        $("notice").textContent = `${a.label}: done. ${post.title} is now ${words(res.status)}, version ${res.version}.`;
+        await Promise.all([openPost(post.id, opener, { refocus: a.id }), load()]);
+      } catch (err) {
+        go.disabled = false;
+        go.removeAttribute("aria-busy");
+        if (err instanceof ApiError && err.error.code === "STALE_APPROVAL") {
+          const now = err.body && err.body.current ? err.body.current.content_version : "a newer version";
+          close();
+          await openPost(post.id, opener, { banner: `This post changed (version ${post.content_version} to ${now}). Read it again before deciding. Nothing was recorded.` });
+          await load();
+          return;
+        }
+        const e2 = err instanceof ApiError ? err.error : { code: "BROWSER_ERROR", message: "The page could not send this.", next: "Reload the page." };
+        errorBox.replaceChildren(el("div", { class: "code mono", text: e2.code }), el("p", { text: e2.message }), el("p", {}, el("strong", { text: "What to do: " }), e2.next || "Reload the page."));
+        errorBox.hidden = false;
+      }
+    });
+    document.body.append(dlg);
+    dlg.showModal();
+    // A decision with no fields opens on "Go back", so a stray Enter never approves (U3 review M3).
+    (dlg.querySelector("textarea, input, select") || back).focus();
+  }
+
   function actionRows(post) {
-    const rows = post.actions.map((a) => {
-      const line = (CLI[a.id] || (() => `brandcal help ${a.id}`))(post);
+    const all = [...post.actions, post.note].filter(Boolean);
+    const rows = all.map((a) => {
+      const button = el("button", { type: "button", class: "btn action", data: { action: a.id }, disabled: !a.enabled, "aria-disabled": a.enabled ? null : "true", text: a.label });
+      button.addEventListener("click", () => confirmDialog(a, post, button));
       return el("div", { class: "action-row" },
-        el("button", { type: "button", class: "action", disabled: true, "aria-disabled": "true", text: a.label }),
-        a.warning && el("p", { class: "muted", text: a.warning }),
-        a.refusal ? el("p", { class: "reason" }, el("span", { class: "code mono", text: a.refusal.code }), ` ${a.refusal.message} `, el("strong", { text: "What to do: " }), a.refusal.next) : el("p", { class: "muted", text: "You may do this, but this version of the console is read-only." }),
-        el("p", { class: "muted", text: "Equivalent command:" }),
-        el("code", { class: "cli", text: line }));
+        button,
+        a.warning && a.id === "edit" && el("p", { class: "muted", text: a.warning }),
+        a.refusal && el("p", { class: "reason" }, el("span", { class: "code mono", text: a.refusal.code }), ` ${a.refusal.message} `, el("strong", { text: "What to do: " }), a.refusal.next),
+        el("p", { class: "muted", text: "Agent equivalent (CLI)" }),
+        el("code", { class: "cli", text: a.cli }));
     });
     return section("Actions", ...(rows.length ? rows : [el("p", { class: "muted", text: "This post is closed, so there is nothing to do." })]));
+  }
+
+  // ---- text diff between two versions (line based, no library) -------------------------------
+
+  const flat = (v) => [...v.parts.flatMap((t, i) => [`Part ${i + 1}:`, ...t.split("\n")]), `First comment: ${v.first_comment || ""}`, `Target URL: ${v.target_url || ""}`, ...v.alt_texts.map((t, i) => `Alt text ${i + 1}: ${t}`)];
+
+  function diffLines(a, b) {
+    const n = a.length, m = b.length;
+    const t = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) t[i][j] = a[i] === b[j] ? t[i + 1][j + 1] + 1 : Math.max(t[i + 1][j], t[i][j + 1]);
+    const out = [];
+    let i = 0, j = 0;
+    while (i < n && j < m) {
+      if (a[i] === b[j]) { out.push([" ", a[i]]); i++; j++; } else if (t[i + 1][j] >= t[i][j + 1]) out.push(["-", a[i++]]); else out.push(["+", b[j++]]);
+    }
+    while (i < n) out.push(["-", a[i++]]);
+    while (j < m) out.push(["+", b[j++]]);
+    return out;
+  }
+
+  function versionDiff(versions) {
+    if (versions.length < 2) return null;
+    const pick = (label, value) => el("select", { "aria-label": label }, ...versions.map((v) => el("option", { value: v.version, text: `Version ${v.version}` })), null);
+    const from = pick("Compare from", 0), to = pick("Compare to", 0);
+    from.value = versions[versions.length - 2].version;
+    to.value = versions[versions.length - 1].version;
+    const out = el("pre", { class: "diff", "aria-live": "polite" });
+    const draw = () => {
+      const find = (s) => versions.find((v) => String(v.version) === s.value);
+      out.replaceChildren(...diffLines(flat(find(from)), flat(find(to))).map(([sign, line]) => el("span", { class: `diff-line ${sign === "+" ? "add" : sign === "-" ? "del" : "same"}`, text: `${sign} ${line}\n` })));
+    };
+    from.addEventListener("change", draw);
+    to.addEventListener("change", draw);
+    draw();
+    return section("Compare versions", el("div", { class: "row" }, from, el("span", { class: "muted", text: "to" }), to), out);
   }
 
   async function copy(text, status) {
@@ -418,7 +551,7 @@
     window.setTimeout(() => { status.textContent = ""; }, 2500);
   }
 
-  function renderPanel(post, events) {
+  function renderPanel(post, events, versions, banner) {
     const panel = $("panel");
     const close = el("button", { type: "button", class: "icon-btn", "aria-label": "Close panel" }, icon("ui", "close"));
     close.addEventListener("click", closePanel);
@@ -427,22 +560,24 @@
     fp.addEventListener("click", () => copy(post.content_hash, status));
     const w = span(post.window);
     const blocks = [
+      banner && el("p", { class: "refusal stale", role: "alert", text: banner }),
       el("section", { class: "sec head", data: { status: post.status } }, el("h2", { id: "panel-title", text: post.title }), close, el("div", { class: "row" }, statusChip(post.status), platformTag(post.platform), typeTag(post.post_type), ...badges(post))),
       section(null, dl([["Post", el("code", { text: post.id })], ["When", `${dayLabel(w.day)}, ${w.text}`], ["Window", el("code", { text: post.window })], ["Version", String(post.content_version)], ["Fingerprint", el("span", { class: "row" }, fp, status)]])),
-      ...textParts(post), mediaBlock(post), details(post), versionHistory(post, events), audit(events), actionRows(post),
+      ...textParts(post), mediaBlock(post), details(post), versionHistory(post, events), versionDiff(versions), audit(events), actionRows(post),
     ];
     panel.replaceChildren(...blocks.filter(Boolean));
     panel.scrollTop = 0;
   }
 
-  async function openPost(id, from) {
+  async function openPost(id, from, opts = {}) {
     const mine = ++panelSeq;
     opener = from || null;
     try {
-      const [post, ev] = await Promise.all([getJson(`/api/posts/${encodeURIComponent(id)}`), getJson(`/api/events?post=${encodeURIComponent(id)}`)]);
+      const path = `/api/posts/${encodeURIComponent(id)}`;
+      const [post, ev, vs] = await Promise.all([getJson(path), getJson(`/api/events?post=${encodeURIComponent(id)}`), getJson(`${path}/versions`)]);
       if (mine !== panelSeq) return;
       state.post = id;
-      renderPanel(post, ev.events);
+      renderPanel(post, ev.events, vs.versions, opts.banner);
       const panel = $("panel");
       // Sit below the floating toolbar so its controls (theme, filters) stay reachable.
       panel.style.setProperty("top", `${Math.round(document.querySelector(".bar").getBoundingClientRect().bottom + 12)}px`);
@@ -452,7 +587,7 @@
       markCurrent();
       writeUrl();
       hideError();
-      panel.querySelector(".icon-btn").focus({ preventScroll: true });
+      (panel.querySelector(`[data-action="${opts.refocus}"]:not([disabled])`) || panel.querySelector(".icon-btn")).focus({ preventScroll: true });
     } catch (err) {
       if (mine === panelSeq) showError(err);
     }
@@ -519,7 +654,19 @@
     $("prev").addEventListener("click", () => step(-1));
     $("next").addEventListener("click", () => step(1));
     $("today").addEventListener("click", () => { state.date = today(); load(); });
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePanel(); });
+    $("scrim").addEventListener("click", closePanel);
+    const toggle = $("needs-toggle");
+    const collapse = (on) => {
+      toggle.setAttribute("aria-expanded", String(!on));
+      $("needs").hidden = on;
+    };
+    try { collapse(localStorage.getItem(NEEDS_KEY) === "collapsed"); } catch (err) { collapse(false); }
+    toggle.addEventListener("click", () => {
+      const on = toggle.getAttribute("aria-expanded") === "true";
+      collapse(on);
+      try { localStorage.setItem(NEEDS_KEY, on ? "collapsed" : "open"); } catch (err) { /* not remembered */ }
+    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !document.querySelector("dialog[open]")) closePanel(); });
   }
 
   async function loadSprite() {
