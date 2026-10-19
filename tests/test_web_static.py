@@ -167,6 +167,16 @@ def test_the_ui_never_uses_inner_html_or_transition_all() -> None:
     assert not re.search(r"transition:\s*all", text("app.css"))
 
 
+def test_outside_month_days_keep_full_text_contrast() -> None:
+    css = text("app.css")
+    rule = re.search(r'\.day\[data-outside="true"\]\s*\{([^}]*)\}', css)
+    assert rule and "opacity" not in rule.group(1)
+
+
+def test_the_sticky_bar_does_not_hide_keyboard_focus() -> None:
+    assert re.search(r"html\s*\{[^}]*scroll-padding-top:\s*\d+px", text("app.css"))
+
+
 def test_unexpected_errors_are_a_json_500_without_detail(
     client: Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:

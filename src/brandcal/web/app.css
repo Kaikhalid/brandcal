@@ -71,6 +71,7 @@ html {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
   line-height: 1.45;
+  scroll-padding-top: 160px;
 }
 body { margin: 0; background: var(--bg); color: var(--ink); min-height: 100vh; }
 h1, h2, h3, h4 { margin: 0; text-wrap: balance; }
@@ -150,7 +151,7 @@ main { padding: 0 16px 48px; outline: none; }
 .month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
 .dow { padding: 0 6px; font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
 .day { background: var(--card); border-radius: 14px; padding: 6px; min-height: 112px; display: grid; gap: 3px; align-content: start; box-shadow: var(--shadow-card); }
-.day[data-outside="true"] { background: transparent; box-shadow: none; opacity: 0.7; }
+.day[data-outside="true"] { background: transparent; box-shadow: none; }
 .day > .num { font-size: 12.5px; font-weight: 600; padding: 0 4px; color: var(--ink-muted); }
 .day[aria-current="date"] > .num { color: var(--accent); }
 .more { border: 0; background: transparent; color: var(--accent); text-align: left; min-height: 28px; padding: 0 6px; border-radius: 8px; }
