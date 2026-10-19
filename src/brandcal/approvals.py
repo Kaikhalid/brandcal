@@ -77,7 +77,7 @@ def _gate(
     return None
 
 
-def _via(verified: Verified | None) -> dict[str, object]:
+def via(verified: Verified | None) -> dict[str, object]:
     """Event detail naming the verified identity of a console decision (UI_SPEC 4.3)."""
     if verified is None:
         return {}
@@ -268,7 +268,7 @@ def approve(
             (at, post_id),
         )
         detail: dict[str, object] = {"approval": approval, "channel": channel, "msg": msg_id}
-        detail.update(_via(verified if console else None))
+        detail.update(via(verified if console else None))
         log_event(conn, actor_id, "approve", post, at, month, detail)
         next_step = (
             "send the approver a receipt: exact text, window, fingerprint, 'reply stop to pull it'"
@@ -328,7 +328,7 @@ def request_changes(
             f"UPDATE posts SET status = 'changes_requested', {CLEAR}, updated_at = ? WHERE id = ?",
             (at, post_id),
         )
-        detail: dict[str, object] = {"approval": approval, **_via(verified if console else None)}
+        detail: dict[str, object] = {"approval": approval, **via(verified if console else None)}
         log_event(conn, actor_id, "request-changes", post, at, month, detail)
         return post_result(conn, post_id, "writer: edit the post, then brandcal submit", [])
 
@@ -383,7 +383,7 @@ def reschedule(
             (window, at, post_id),
         )
         detail: dict[str, object] = {"approval": approval, "window": window}
-        detail.update(_via(verified if console else None))
+        detail.update(via(verified if console else None))
         log_event(conn, actor_id, "reschedule", post, at, month, detail)
         return post_result(
             conn, post_id, f"publish inside the new window: brandcal begin {post_id}", []
@@ -409,8 +409,12 @@ def cancel(
     """``seen`` is the (version, hash, window) the console showed; it is checked as for approve."""
     if kind not in CANCEL_KINDS:
         raise bad_args(f"Unknown cancel kind {kind!r}.", f"Use one of: {' '.join(CANCEL_KINDS)}")
-    _need("reason", reason)
     console = _console(role, cfg, verified, "cancel") if channel == "console" else None
+    if console is not None and not reason.strip():
+        raise BrandcalError(
+            ErrorCode.REASON_REQUIRED, "A cancel needs a reason.", "Say why the post is cancelled."
+        )
+    _need("reason", reason)
     if console is None and role not in ("manager", "writer"):
         raise BrandcalError(ErrorCode.ROLE_NOT_ALLOWED, f"Role {role} may not cancel posts.")
     decided_by = None
@@ -428,9 +432,7 @@ def cancel(
             )
         if seen is not None:
             _bind(post, seen[0], seen[1], seen[2])
-        # Transition roles name who records a decision; a console decision is the approver's
-        # own, recorded for them, so it is checked as the manager's (UI_SPEC 3.5).
-        check_transition(post["status"], "cancelled", "manager" if console else role)
+        check_transition(post["status"], "cancelled", role)
         if role == "writer" and post["owner"] != actor_id:
             raise BrandcalError(
                 ErrorCode.ROLE_NOT_ALLOWED,
@@ -450,7 +452,7 @@ def cancel(
                 "Wait for the claim to end (published, failed or expired).",
             )
         at, month = now_and_month(cfg)
-        detail: dict[str, object] = {"kind": kind, **_via(verified if console else None)}
+        detail: dict[str, object] = {"kind": kind, **via(verified if console else None)}
         if decided_by is not None:
             detail["approval"] = _record(
                 conn,

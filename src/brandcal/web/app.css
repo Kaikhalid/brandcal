@@ -240,6 +240,27 @@ html[data-ready] .panel { transition-property: opacity, transform, visibility, b
   .needs { grid-template-columns: 1fr; }
 }
 
+/* Write actions (U3): confirm dialog, forms, diff. Inner controls 12px inside a 24px dialog with 12px padding. */
+.notice { margin: 0 16px; min-height: 0; color: var(--ink-muted); }
+.stale { margin: 0 0 12px; font-weight: 600; }
+dialog.confirm { border: 0; border-radius: 24px; padding: 12px; width: min(560px, calc(100vw - 32px)); color: var(--ink); background: var(--panel-solid); box-shadow: var(--shadow-float); }
+dialog.confirm::backdrop { background: oklch(0 0 0 / 0.4); }
+.form { display: grid; gap: 12px; padding: 8px; }
+.form h2 { margin: 0; text-wrap: balance; }
+.form .says { margin: 0; text-wrap: pretty; }
+.field { display: grid; gap: 4px; font-weight: 600; }
+.field small { font-weight: 400; }
+.field input, .field textarea, .field select { font: inherit; color: inherit; background: var(--card); border: 1px solid var(--control-line); border-radius: var(--radius-inner); padding: 8px 10px; min-height: 40px; }
+.row.end { justify-content: flex-end; }
+.btn.primary { background: var(--accent-fill); color: var(--accent-ink); font-weight: 600; }
+.btn.primary.danger { background: var(--danger-bg); color: var(--danger-ink); }
+.btn { transition-property: box-shadow, scale; transition-duration: 150ms; transition-timing-function: ease-out; }
+.btn:disabled { opacity: 0.5; }
+.diff { margin: 8px 0 0; padding: 8px; border-radius: var(--radius-inner); background: var(--bg); overflow-x: auto; white-space: pre-wrap; }
+.diff-line { display: block; }
+.diff-line.add { color: var(--st-approved); }
+.diff-line.del { color: var(--st-changes); }
+
 /* Fallbacks */
 @media (prefers-reduced-transparency: reduce) {
   .glass { background: var(--panel-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }

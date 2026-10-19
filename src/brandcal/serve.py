@@ -174,7 +174,8 @@ def _cancel(
     conn: sqlite3.Connection, cfg: Mapping[str, Any], who: actions.Identity, pid: str, b: Body
 ) -> Any:
     return actions.cancel(
-        conn, cfg, who, pid, _text(b, "kind"), _text(b, "reason"), "console-cancel", "Cancel",
+        conn, cfg, who, pid, _text(b, "kind"), _optional(b, "reason") or "", "console-cancel",
+        "Cancel",
         channel="console", seen=_seen(b),
     )  # fmt: skip
 
@@ -182,10 +183,26 @@ def _cancel(
 def _edit(
     conn: sqlite3.Connection, cfg: Mapping[str, Any], who: actions.Identity, pid: str, b: Body
 ) -> Any:
-    fields = b.get("fields")
+    fields = b.get("fields") or {}
     if not isinstance(fields, dict) or not all(isinstance(v, str) for v in fields.values()):
         raise posts.bad_args("fields must be an object of text values.", 'Send {"fields": {...}}.')
-    return actions.edit(conn, cfg, who, pid, [f"{k}={v}" for k, v in fields.items()])
+    parts, alts = _numbered(b, "parts"), _numbered(b, "alt_texts")
+    if not (fields or parts or alts):
+        raise posts.bad_args("There is nothing to change.", "Send fields, parts or alt_texts.")
+    return actions.edit(conn, cfg, who, pid, [f"{k}={v}" for k, v in fields.items()], parts, alts)
+
+
+def _numbered(body: Body, key: str) -> dict[int, str]:
+    """An object of position -> text, e.g. {"1": "New text"}."""
+    value = body.get(key) or {}
+    ok = isinstance(value, dict) and all(
+        k.isdigit() and isinstance(v, str) for k, v in value.items()
+    )
+    if not ok:
+        raise posts.bad_args(
+            f"{key} must map positions to text.", f'Send {{"{key}": {{"1": "..."}}}}.'
+        )
+    return {int(k): v for k, v in value.items()}
 
 
 def _submit(
@@ -347,6 +364,8 @@ class _Handler(BaseHTTPRequestHandler):
                 )  # fmt: skip
             elif len(parts) == 2 and parts[0] == "posts":
                 out = actions.post_detail(conn, app.cfg, parts[1], session.viewer)
+            elif len(parts) == 3 and parts[0] == "posts" and parts[2] == "versions":
+                out = actions.versions(conn, parts[1])
             elif parts == ["events"]:
                 limit = _int_arg(q, "limit") or actions.EVENTS_LIMIT
                 out = actions.events(conn, _int_arg(q, "since"), q.get("post"), None, limit)

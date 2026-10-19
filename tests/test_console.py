@@ -220,12 +220,14 @@ def test_console_reschedule_and_cancel(home: Path, capsys: pytest.CaptureFixture
 
 
 def test_approver_still_refused_by_other_actions(home: Path) -> None:
+    # U3: a verified console approver may edit and submit; without the identity (the CLI) not.
     post = add_post(home)
+    cli_approver = Identity(APPROVER.agent)
     with open_home(home) as (conn, cfg):
         conn.execute("UPDATE posts SET status = 'changes_requested'")  # so submit is a real move
         for call in (
-            lambda: actions.edit(conn, cfg, APPROVER, post["id"], ["title=X"]),
-            lambda: actions.submit(conn, cfg, APPROVER, post["id"]),
+            lambda: actions.edit(conn, cfg, cli_approver, post["id"], ["title=X"]),
+            lambda: actions.submit(conn, cfg, cli_approver, post["id"]),
         ):
             with pytest.raises(BrandcalError) as err:
                 call()

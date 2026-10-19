@@ -50,6 +50,8 @@ def base_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     verifier = Verifier(TEAM, AUD, 5, fetch=FakeJwks(signer))
     server = serve.make_server(home, load_config(home), 0, verifier)
     threading.Thread(target=server.serve_forever, daemon=True).start()
+    origin = f"http://127.0.0.1:{server.server_address[1]}"
+    server.app.origins, server.app.hosts = [origin], {origin.split("//")[1]}  # type: ignore[attr-defined]
     serve_token = signer.token(claims())
     yield f"http://127.0.0.1:{server.server_address[1]}|{serve_token}"
     server.shutdown()
@@ -152,6 +154,49 @@ def test_refusals_and_disabled_buttons_show_code_and_next(browser_page: tuple[An
     page.wait_for_selector("#panel[data-open='true'] .action")
     text = page.locator("#panel").inner_text()
     assert "EDIT_WHILE_CLAIMED" in text and "What to do:" in text
-    assert page.locator("#panel button.action:not([disabled])").count() == 0
+    # A claim disables Edit and Cancel; the core still allows a time change and a note.
+    enabled = page.locator("#panel button.action:not([disabled])").all_inner_texts()
+    assert sorted(enabled) == ["Add a note", "Change time"]
+    assert not problems
+    page.close()
+
+
+def open_action(context: Any, url: str, action: str) -> tuple[Any, list[str]]:
+    """The panel of a pending post with the confirm dialog of one action open."""
+    page, problems = open_view(context, url, f"view=week&date={WEEK.isoformat()}", "light")
+    page.locator("#calendar .card[data-status='pending_approval']").last.click()
+    page.wait_for_selector(f"#panel[data-open='true'] [data-action='{action}']:not([disabled])")
+    page.locator(f"#panel [data-action='{action}']").click()
+    page.wait_for_selector("dialog[open]")
+    return page, problems
+
+
+def test_approve_confirm_dialog(browser_page: tuple[Any, str]) -> None:
+    page, problems = open_action(*browser_page, "approve")
+    text = page.locator("dialog[open]").inner_text()
+    assert "brandcal approve" in text and "fingerprint" in text
+    page.keyboard.press("Escape")  # cancels, and the panel stays open
+    assert page.locator("dialog[open]").count() == 0
+    assert page.locator("#panel[data-open='true']").count() == 1
+    assert page.evaluate("document.activeElement.dataset.action") == "approve"
+    page.locator("#panel [data-action='approve']").click()
+    page.wait_for_selector("dialog[open]")
+    page.wait_for_timeout(100)
+    finish(page, problems, "approve-confirm-light.png")
+
+
+def test_request_changes_form(browser_page: tuple[Any, str]) -> None:
+    page, problems = open_action(*browser_page, "request-changes")
+    assert page.locator("dialog[open] textarea[required]").count() == 3
+    finish(page, problems, "request-changes-light.png")
+
+
+def test_confirmed_approve_records_and_the_panel_updates(browser_page: tuple[Any, str]) -> None:
+    page, problems = open_action(*browser_page, "approve")
+    page.locator("dialog[open] button[type=submit]").click()
+    page.wait_for_selector("dialog[open]", state="detached")
+    page.wait_for_selector("#panel .status[data-status='approved']")
+    assert "Approved" in page.locator("#panel").inner_text()
+    assert "Approve: done" in page.locator("#notice").inner_text()
     assert not problems
     page.close()

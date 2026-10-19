@@ -17,11 +17,11 @@ from typing import Any
 
 from brandcal import approvals, archive, posts, reports
 from brandcal import audit as audit_mod
-from brandcal.approvals import Verified
+from brandcal.approvals import CONSOLE_SOURCE, Verified
 from brandcal.config import display_tz
 from brandcal.errors import EXIT_CODES, BrandcalError, ErrorCode
 from brandcal.timefmt import parse_time
-from brandcal.transitions import CLOSED, STATES, TRANSITIONS
+from brandcal.transitions import CLOSED, NEEDS_YOU, STATES, TRANSITIONS
 
 # Must match the posts.post_type CHECK in schema.sql (SPEC 5.3); test_cli_frame checks this.
 POST_TYPES: tuple[str, ...] = (
@@ -97,6 +97,7 @@ def ui_schema(conn: sqlite3.Connection, cfg: Mapping[str, Any]) -> dict[str, obj
         **schema(),
         "platforms": posts.platform_limits(conn),
         "timezone": cfg.get("timezone"),
+        "needs_you": list(NEEDS_YOU),
         "claim_minutes": int(cfg.get("claim_minutes", 30)),
         "campaigns": list(cfg.get("campaigns", [])),
         "pillars": list(cfg.get("pillars", [])),
@@ -117,6 +118,28 @@ _LABELS = {
     "submit": "Submit for approval",
     "reschedule": "Change time",
 }
+
+
+def _cli_line(button: str, post: Mapping[str, Any]) -> str:
+    """The `brandcal` command that does the same, with the post's id, version and fingerprint
+    filled in and <placeholders> for what a person has to supply (UI_SPEC 1.5)."""
+    pid = post.get("id", "<post>")
+    seen = (
+        f"{pid} --version {post.get('content_version')} --hash {str(post.get('content_hash'))[:8]}"
+    )
+    card = "--msg <message-id> --words <approver-words> --approver <approver> --as <manager>"
+    return {
+        "approve": f"brandcal approve {seen} --channel card {card}",
+        "request-changes": f"brandcal request-changes {seen} {card}"
+        " --what <what> --where <where> --instruction <instruction>",
+        "reschedule": f"brandcal reschedule {seen} --window <new-window> {card}",
+        "cancel": (
+            f"brandcal cancel {pid} --kind <idea|version|plan> --reason <reason> --as <manager>"
+        ),
+        "edit": f"brandcal edit {pid} <field>=<value> --as <writer>",
+        "submit": f"brandcal submit {pid} --as <writer>",
+        "note": f"brandcal note {pid} <text> --as <writer>",
+    }[button]
 
 
 def _blocked(button: str, post: Mapping[str, Any], cfg: Mapping[str, Any]) -> BrandcalError | None:
@@ -173,44 +196,82 @@ def post_actions(
     Every button with a transition is listed; one that is not allowed is disabled and carries the
     refusal it would produce. Closed posts have no buttons.
     """
-    out: list[dict[str, object]] = []
-    for button in _BUTTONS.get(str(post.get("status")), ()):
-        label = _LABELS[button]
-        if button == "reschedule" and post.get("status") == "missed":
-            label = "Approve new time"
-        if viewer is None:
-            why: BrandcalError | None = BrandcalError(
-                ErrorCode.IDENTITY_UNVERIFIED,
-                "This session has no verified identity, so it is read-only.",
-                "Sign in through Cloudflare Access.",
-            )
-        elif viewer != "approver":
-            why = BrandcalError(
-                ErrorCode.ROLE_NOT_ALLOWED,
-                "You have read-only access.",
-                "Ask the admin to list you in serve.approvers.",
-            )
+    return [_item(b, post, cfg, viewer) for b in _BUTTONS.get(str(post.get("status")), ())]
+
+
+def _item(
+    button: str, post: Mapping[str, Any], cfg: Mapping[str, Any], viewer: str | None
+) -> dict[str, object]:
+    """One button: its label, command line, and the refusal it would produce."""
+    label = "Add a note" if button == "note" else _LABELS[button]
+    if button == "reschedule" and post.get("status") == "missed":
+        label = "Approve new time"
+    if viewer is None:
+        why: BrandcalError | None = BrandcalError(
+            ErrorCode.IDENTITY_UNVERIFIED,
+            "This session has no verified identity, so it is read-only.",
+            "Sign in through Cloudflare Access.",
+        )
+    elif viewer != "approver":
+        why = BrandcalError(
+            ErrorCode.ROLE_NOT_ALLOWED,
+            "You have read-only access.",
+            "Ask the admin to list you in serve.approvers.",
+        )
+    else:
+        why = _blocked(button, post, cfg)
+    item: dict[str, object] = {
+        "id": button,
+        "label": label,
+        "cli": _cli_line(button, post),
+        "enabled": why is None,
+        "refusal": None if why is None else why.to_dict()["error"],
+    }
+    if button == "edit":
+        # UI_SPEC 4.1: generated from the status and version, never typed in the UI.
+        new = f"Saving creates version {int(post.get('content_version') or 0) + 1}"
+        if post.get("status") in ("approved", "missed"):
+            item["warning"] = f"{new} and withdraws the approval. You will need to approve again."
         else:
-            why = _blocked(button, post, cfg)
-        item: dict[str, object] = {
-            "id": button,
-            "label": label,
-            "enabled": why is None,
-            "refusal": None if why is None else why.to_dict()["error"],
-        }
-        if button == "edit" and post.get("status") == "approved":
-            item["warning"] = "Editing returns the post to approval."
-        out.append(item)
-    return out
+            item["warning"] = f"{new}."
+    return item
 
 
 def post_detail(
     conn: sqlite3.Connection, cfg: Mapping[str, Any], post_id: str, viewer: str | None
 ) -> dict[str, object]:
-    """``show`` plus the buttons for this viewer."""
+    """``show`` plus the buttons for this viewer, and the note button (not on closed posts)."""
     out = show(conn, post_id)
     out["actions"] = post_actions(out, cfg, viewer)
+    open_post = out.get("status") not in CLOSED
+    out["note"] = _item("note", out, cfg, viewer) if open_post else None
     return out
+
+
+def versions(conn: sqlite3.Connection, post_id: str) -> dict[str, object]:
+    """The content of every version of a post, oldest first (UI_SPEC 5.3).
+
+    Each add and content edit stores a snapshot in its event; the current version is always read
+    live, so a post that predates snapshots still shows its present text.
+    """
+    posts.load_post(conn, post_id)
+    found: dict[int, dict[str, Any]] = {}
+    rows = conn.execute(
+        "SELECT at, actor, detail FROM events WHERE post_id = ? AND detail IS NOT NULL ORDER BY id",
+        (post_id,),
+    )
+    for row in rows:
+        detail = json.loads(row["detail"])
+        snap = detail.get("snapshot") if isinstance(detail, dict) else None
+        if isinstance(snap, dict):
+            found[int(snap["version"])] = {
+                **snap, "editor": detail.get("identity") or row["actor"], "at": row["at"],
+            }  # fmt: skip
+    now = posts.content_snapshot(conn, post_id)
+    live = int(str(now["version"]))
+    if live not in found or found[live]["hash"] != now["hash"]:
+        found[live] = {**now, "editor": None, "at": None}
+    return {"ok": True, "id": post_id, "versions": [found[v] for v in sorted(found)]}
 
 
 def check(conn: sqlite3.Connection, cfg: Mapping[str, Any], post_id: str) -> dict[str, object]:
@@ -381,29 +442,58 @@ def cancel(
     return out
 
 
+def _console_via(who: Identity, cfg: Mapping[str, Any]) -> dict[str, object] | None:
+    """The event detail of a console edit; the approver may only write with a verified identity.
+
+    Other roles return None. The CLI never passes a verified identity, so it keeps refusing the
+    approver (UI_SPEC 1.2).
+    """
+    if who.role(cfg) != "approver":
+        return None
+    if who.verified is None:
+        raise BrandcalError(
+            ErrorCode.ROLE_NOT_ALLOWED,
+            "Role approver may not change posts from the command line.",
+            "Use the web console, or ask a writer or manager.",
+        )
+    if who.verified.source != CONSOLE_SOURCE or not who.verified.identity.strip():
+        raise BrandcalError(
+            ErrorCode.IDENTITY_UNVERIFIED,
+            "Changes from the console need a verified identity; none was given.",
+            "Sign in through Cloudflare Access.",
+        )
+    return approvals.via(who.verified)
+
+
 def edit(
     conn: sqlite3.Connection,
     cfg: Mapping[str, Any],
     who: Identity,
     post_id: str,
     assignments: list[str],
+    parts: Mapping[int, str] | None = None,
+    alt_texts: Mapping[int, str] | None = None,
 ) -> dict[str, object]:
     out: dict[str, object] = posts.edit_post(
-        conn, who.agent, who.role(cfg), cfg, post_id, assignments
-    )
+        conn, who.agent, who.role(cfg), cfg, post_id, assignments, parts, alt_texts,
+        _console_via(who, cfg),
+    )  # fmt: skip
     return out
 
 
 def submit(
     conn: sqlite3.Connection, cfg: Mapping[str, Any], who: Identity, post_id: str
 ) -> dict[str, object]:
-    out: dict[str, object] = posts.submit_post(conn, who.agent, who.role(cfg), cfg, post_id)
+    out: dict[str, object] = posts.submit_post(
+        conn, who.agent, who.role(cfg), cfg, post_id, _console_via(who, cfg)
+    )
     return out
 
 
 def note(
     conn: sqlite3.Connection, cfg: Mapping[str, Any], who: Identity, post_id: str, text: str
 ) -> dict[str, object]:
-    who.role(cfg)  # the agent must exist
-    out: dict[str, object] = posts.add_note(conn, who.agent, cfg, post_id, text)
+    out: dict[str, object] = posts.add_note(
+        conn, who.agent, cfg, post_id, text, _console_via(who, cfg)
+    )
     return out
