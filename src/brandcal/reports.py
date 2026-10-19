@@ -41,6 +41,23 @@ def _start(post: sqlite3.Row) -> datetime:
     return start
 
 
+def _structured_reason(conn: sqlite3.Connection, post_id: str) -> dict[str, str] | None:
+    """The what/where/instruction of the latest request for changes, if it has them (4.2)."""
+    row = conn.execute(
+        "SELECT changes_requested FROM approvals WHERE post_id = ? AND decision = 'request_changes'"
+        " ORDER BY id DESC LIMIT 1",
+        (post_id,),
+    ).fetchone()
+    try:
+        data = json.loads(row[0]) if row and row[0] else None
+    except ValueError:
+        return None
+    keys = ("what", "where", "instruction")
+    if isinstance(data, dict) and all(isinstance(data.get(k), str) for k in keys):
+        return {k: str(data[k]) for k in keys}
+    return None
+
+
 def next_for(
     conn: sqlite3.Connection, cfg: Mapping[str, Any], agent: str, now: datetime | None = None
 ) -> list[dict[str, Any]]:
@@ -57,6 +74,9 @@ def next_for(
         row = short_row(p)
         if role == "writer" and status == "changes_requested" and p["owner"] == agent:
             row["next"] = f"brandcal edit {pid} ... then brandcal submit {pid}"
+            reason = _structured_reason(conn, pid)
+            if reason is not None:
+                row["reason"] = reason
         elif role == "approver" and status == "pending_approval":
             row["next"] = f"brandcal preview {pid}"
         elif role != "manager":

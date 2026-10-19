@@ -6,6 +6,7 @@ import json
 import re
 import sqlite3
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -28,6 +29,59 @@ CANCEL_KINDS = ("idea", "version", "plan")
 _HEX = re.compile(r"[0-9a-f]{8,64}")
 # Cleared in the same UPDATE as any status change (CHECK: only approved posts carry them).
 CLEAR = "native_scheduled_at = NULL, claimed_by = NULL, claim_expires = NULL"
+
+
+@dataclass(frozen=True)
+class Verified:
+    """A human identity checked by the server (UI_SPEC 2.3): the email and where it came from."""
+
+    identity: str
+    source: str
+
+
+CONSOLE_SOURCE = "access-jwt"
+
+
+def _console(role: str, cfg: Mapping[str, Any], verified: Verified | None, what: str) -> str:
+    """Gate a console decision (UI_SPEC 3.1); return the console recorder agent's id."""
+    if verified is None or verified.source != CONSOLE_SOURCE or not verified.identity.strip():
+        raise BrandcalError(
+            ErrorCode.IDENTITY_UNVERIFIED,
+            f"A console decision ({what}) needs a verified identity; none was given.",
+            "Console decisions are made in the web UI behind Cloudflare Access (brandcal serve);"
+            " from the CLI use --channel card or writer-session.",
+        )
+    if role != "approver":
+        raise BrandcalError(
+            ErrorCode.ROLE_NOT_ALLOWED,
+            f"Role {role} may not decide in the console.",
+            "Sign in as an approver.",
+        )
+    serve = cfg.get("serve")
+    agent = serve.get("console_agent") if isinstance(serve, Mapping) else None
+    if agent not in _agents(cfg, "system"):
+        raise bad_args(
+            "serve.console_agent is not a configured agent with role system.",
+            "Set serve.console_agent in config.json, then run: brandcal init",
+        )
+    return str(agent)
+
+
+def _gate(
+    role: str, cfg: Mapping[str, Any], channel: str, verified: Verified | None, what: str
+) -> str | None:
+    """The console recorder for channel console, else None after the manager-only check."""
+    if channel == "console":
+        return _console(role, cfg, verified, what)
+    manager_only(role, what)
+    return None
+
+
+def _via(verified: Verified | None) -> dict[str, object]:
+    """Event detail naming the verified identity of a console decision (UI_SPEC 4.3)."""
+    if verified is None:
+        return {}
+    return {"identity": verified.identity, "source": verified.source, "via": "console"}
 
 
 def manager_only(role: str, what: str) -> None:
@@ -98,13 +152,17 @@ def _record(
     msg_id: str,
     words: str,
     changes: str | None = None,
+    verified: Verified | None = None,
 ) -> int:
+    who = (verified.identity, verified.source) if verified else (None, None)
     cur = conn.execute(
         'INSERT INTO approvals (post_id, decision, content_version, content_hash, "window",'
         " decided_by, channel, relayed_by, recorded_by, source_message_id, approver_words,"
-        " changes_requested, decided_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        " changes_requested, decided_at, verified_identity, identity_source)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (post["id"], decision, post["content_version"], post["content_hash"], window)
-        + (decided_by, channel, relayed_by, recorded_by, msg_id, words, changes, at),
+        + (decided_by, channel, relayed_by, recorded_by, msg_id, words, changes, at)
+        + who,
     )
     return int(cur.lastrowid or 0)
 
@@ -150,9 +208,15 @@ def approve(
     words: str,
     relayed_by: str | None = None,
     approver: str | None = None,
+    *,
+    verified: Verified | None = None,
 ) -> Any:
-    manager_only(role, "record an approval")
-    if channel == "card":
+    console = _gate(role, cfg, channel, verified, "record an approval")
+    if console is not None:
+        if relayed_by is not None:
+            raise bad_args("A console approval has no --relayed-by.", "Drop --relayed-by.")
+        relay = console
+    elif channel == "card":
         if relayed_by not in (None, actor_id):
             raise bad_args("A card approval is relayed by the manager.", "Drop --relayed-by.")
         relay = actor_id
@@ -164,7 +228,7 @@ def approve(
         raise bad_args(f"Unknown channel {channel!r}.", "Use card or writer-session.")
     _need("msg", msg_id)
     _need("words", words)
-    decided_by = _approver(cfg, approver)
+    decided_by = actor_id if console is not None else _approver(cfg, approver)
     with transaction(conn):
         post = load_post(conn, post_id)
         _expect(post, "pending_approval")
@@ -181,15 +245,17 @@ def approve(
             decided_by=decided_by,
             channel=channel,
             relayed_by=relay,
-            recorded_by=actor_id,
+            recorded_by=console or actor_id,
             msg_id=msg_id,
             words=words,
+            verified=verified if console else None,
         )
         conn.execute(
             f"UPDATE posts SET status = 'approved', {CLEAR}, updated_at = ? WHERE id = ?",
             (at, post_id),
         )
         detail: dict[str, object] = {"approval": approval, "channel": channel, "msg": msg_id}
+        detail.update(_via(verified if console else None))
         log_event(conn, actor_id, "approve", post, at, month, detail)
         next_step = (
             "send the approver a receipt: exact text, window, fingerprint, 'reply stop to pull it'"
@@ -210,11 +276,20 @@ def request_changes(
     msg_id: str,
     words: str,
     approver: str | None = None,
+    *,
+    what: str | None = None,
+    where: str | None = None,
+    instruction: str | None = None,
+    channel: str = "card",
+    verified: Verified | None = None,
 ) -> Any:
-    manager_only(role, "record a request for changes")
+    console = _gate(role, cfg, channel, verified, "record a request for changes")
+    if channel not in ("card", "console"):
+        raise bad_args(f"Unknown channel {channel!r}.", "Use card or console.")
     _need("msg", msg_id)
     _need("words", words)
-    decided_by = _approver(cfg, approver)
+    changes = _reason(channel, words, what, where, instruction)
+    decided_by = actor_id if console is not None else _approver(cfg, approver)
     with transaction(conn):
         post = load_post(conn, post_id)
         _expect(post, "pending_approval")
@@ -227,18 +302,20 @@ def request_changes(
             "request_changes",
             window=post["window"],
             decided_by=decided_by,
-            channel="card",
-            relayed_by=actor_id,
-            recorded_by=actor_id,
+            channel=channel,
+            relayed_by=console or actor_id,
+            recorded_by=console or actor_id,
             msg_id=msg_id,
             words=words,
-            changes=words,
+            changes=changes,
+            verified=verified if console else None,
         )
         conn.execute(
             f"UPDATE posts SET status = 'changes_requested', {CLEAR}, updated_at = ? WHERE id = ?",
             (at, post_id),
         )
-        log_event(conn, actor_id, "request-changes", post, at, month, {"approval": approval})
+        detail: dict[str, object] = {"approval": approval, **_via(verified if console else None)}
+        log_event(conn, actor_id, "request-changes", post, at, month, detail)
         return post_result(conn, post_id, "writer: edit the post, then brandcal submit", [])
 
 
@@ -254,13 +331,16 @@ def reschedule(
     msg_id: str,
     words: str,
     approver: str | None = None,
+    *,
+    channel: str = "card",
+    verified: Verified | None = None,
 ) -> Any:
     """Time-only decision: the new window becomes the approved one; a missed post is approved."""
-    manager_only(role, "record a time change")
+    console = _gate(role, cfg, channel, verified, "record a time change")
     _need("msg", msg_id)
     _need("words", words)
     window = normalise_window(new_window, display_tz(cfg))
-    decided_by = _approver(cfg, approver)
+    decided_by = actor_id if console is not None else _approver(cfg, approver)
     with transaction(conn):
         post = load_post(conn, post_id)
         _expect(post, "approved", "missed")
@@ -273,11 +353,12 @@ def reschedule(
             "reschedule",
             window=window,
             decided_by=decided_by,
-            channel="card",
-            relayed_by=actor_id,
-            recorded_by=actor_id,
+            channel=channel,
+            relayed_by=console or actor_id,
+            recorded_by=console or actor_id,
             msg_id=msg_id,
             words=words,
+            verified=verified if console else None,
         )
         # An approved post keeps its status (and any claim or queue entry); a missed one is
         # approved again, which clears them.
@@ -287,6 +368,7 @@ def reschedule(
             (window, at, post_id),
         )
         detail: dict[str, object] = {"approval": approval, "window": window}
+        detail.update(_via(verified if console else None))
         log_event(conn, actor_id, "reschedule", post, at, month, detail)
         return post_result(
             conn, post_id, f"publish inside the new window: brandcal begin {post_id}", []
@@ -304,26 +386,32 @@ def cancel(
     msg_id: str | None = None,
     words: str | None = None,
     approver: str | None = None,
+    *,
+    channel: str = "card",
+    verified: Verified | None = None,
 ) -> Any:
     if kind not in CANCEL_KINDS:
         raise bad_args(f"Unknown cancel kind {kind!r}.", f"Use one of: {' '.join(CANCEL_KINDS)}")
     _need("reason", reason)
-    if role not in ("manager", "writer"):
+    console = _console(role, cfg, verified, "cancel") if channel == "console" else None
+    if console is None and role not in ("manager", "writer"):
         raise BrandcalError(ErrorCode.ROLE_NOT_ALLOWED, f"Role {role} may not cancel posts.")
-    recording = bool(msg_id or words)
     decided_by = None
-    if recording:
-        manager_only(role, "record the approver's cancel decision")
+    if msg_id or words or console:
+        if console is None:
+            manager_only(role, "record the approver's cancel decision")
         _need("msg", msg_id)
         _need("words", words)
-        decided_by = _approver(cfg, approver)
+        decided_by = actor_id if console else _approver(cfg, approver)
     with transaction(conn):
         post = load_post(conn, post_id)
         if post["status"] in CLOSED:
             raise BrandcalError(
                 ErrorCode.POST_CLOSED, f"{post_id} is {post['status']} and cannot be changed."
             )
-        check_transition(post["status"], "cancelled", role)
+        # Transition roles name who records a decision; a console decision is the approver's
+        # own, recorded for them, so it is checked as the manager's (UI_SPEC 3.5).
+        check_transition(post["status"], "cancelled", "manager" if console else role)
         if role == "writer" and post["owner"] != actor_id:
             raise BrandcalError(
                 ErrorCode.ROLE_NOT_ALLOWED,
@@ -343,7 +431,7 @@ def cancel(
                 "Wait for the claim to end (published, failed or expired).",
             )
         at, month = now_and_month(cfg)
-        detail: dict[str, object] = {"kind": kind}
+        detail: dict[str, object] = {"kind": kind, **_via(verified if console else None)}
         if decided_by is not None:
             detail["approval"] = _record(
                 conn,
@@ -352,11 +440,12 @@ def cancel(
                 "cancel",
                 window=post["window"],
                 decided_by=decided_by,
-                channel="card",
-                relayed_by=actor_id,
-                recorded_by=actor_id,
+                channel=channel,
+                relayed_by=console or actor_id,
+                recorded_by=console or actor_id,
                 msg_id=str(msg_id),
                 words=str(words),
+                verified=verified if console else None,
             )
         conn.execute(
             f"UPDATE posts SET status = 'cancelled', cancel_kind = ?, closed_at = ?, {CLEAR},"
@@ -365,6 +454,38 @@ def cancel(
         )
         log_event(conn, actor_id, "cancel", post, at, month, detail, reason)
         return post_result(conn, post_id, "", [])
+
+
+def _reason(
+    channel: str, words: str, what: str | None, where: str | None, instruction: str | None
+) -> str:
+    """The text stored in changes_requested: JSON what/where/instruction (UI_SPEC 4.2) or words."""
+    given = {"what": what, "where": where, "instruction": instruction}
+    if channel != "console" and not any(given.values()):
+        return words
+    if not all(v and v.strip() for v in given.values()):
+        raise BrandcalError(
+            ErrorCode.REASON_REQUIRED,
+            "Request changes needs what, where and instruction, all non-empty.",
+            "Give --what (what is wrong), --where (where it is) and --instruction (what to do).",
+        )
+    return json.dumps({k: str(v).strip() for k, v in given.items()}, sort_keys=True)
+
+
+def console_unverified(conn: sqlite3.Connection, post_id: str) -> bool:
+    """True if the approval the post stands on is a console one without a verified identity."""
+    row = conn.execute(
+        "SELECT a.channel, a.verified_identity, a.identity_source FROM approvals a"
+        " JOIN posts p ON p.id = a.post_id WHERE a.post_id = ?"
+        " AND a.decision IN ('approve', 'reschedule') AND a.content_version = p.content_version"
+        " AND a.content_hash = p.content_hash ORDER BY a.id DESC LIMIT 1",
+        (post_id,),
+    ).fetchone()
+    return bool(
+        row
+        and row["channel"] == "console"
+        and (not row["verified_identity"] or row["identity_source"] != CONSOLE_SOURCE)
+    )
 
 
 # --- window binding ----------------------------------------------------------------------

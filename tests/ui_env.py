@@ -71,6 +71,18 @@ def cli_approve(
     capsys: pytest.CaptureFixture[str], home: Path, post: dict[str, Any]
 ) -> dict[str, Any]:
     args = ["approve", post["id"], "--version", str(post["version"]), "--hash", post["hash"]]
-    code, out = run(capsys, home, *args, "--channel", "card", "--msg", "m1", "--words", "Yes")
+    code, out = run(
+        capsys,
+        home,
+        *args,
+        "--channel",
+        "card",
+        "--msg",
+        "m1",
+        "--words",
+        "Yes",
+        "--as",
+        "manager-1",
+    )
     assert code == 0, out
     return out

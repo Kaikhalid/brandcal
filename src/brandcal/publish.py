@@ -191,6 +191,12 @@ def begin(
     with transaction(conn):
         post = load_post(conn, post_id)
         _need_approved(post)
+        if approvals.console_unverified(conn, post_id):
+            raise BrandcalError(
+                ErrorCode.IDENTITY_UNVERIFIED,
+                f"The console approval of {post_id} has no verified identity.",
+                f"Do not publish; the approver must decide again in the web UI: {post_id}",
+            )
         if post["native_scheduled_at"]:
             raise BrandcalError(
                 ErrorCode.NATIVELY_SCHEDULED,

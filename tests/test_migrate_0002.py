@@ -11,7 +11,6 @@ from conftest import AGENTS, PLATFORMS, add_approval, make_post
 from ui_env import UI_AGENTS
 
 from brandcal.db import init_db, open_db
-from brandcal.errors import BrandcalError
 from brandcal.migrations import LATEST
 from brandcal.transitions import TRANSITIONS
 
@@ -191,7 +190,3 @@ def test_console_checks(conn: sqlite3.Connection) -> None:
     # Non-console channels keep the old rules: a system recorder is refused.
     with pytest.raises(sqlite3.DatabaseError, match="recorded_by must be a manager"):
         add_approval(conn, "p0001", recorded_by="console")
-
-
-def test_unused_import_guard() -> None:
-    assert BrandcalError  # keeps the import used if the tests above change
