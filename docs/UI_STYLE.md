@@ -53,9 +53,12 @@ One pastel per platform id. The ink is the readable colour on it. The name is al
 | `youtube` | butter | `#f7e5a0` / `#5a4600` | `#4a3d12` / `#f5e6a3` |
 | `bluesky` | mint | `#c4ebd6` / `#0f5236` | `#17443a` / `#c6f0da` |
 
-Each platform also has an **edge**, a slightly stronger colour of the same hue, used for the 4 px
-left border of a post block (week, month, day list) and for the small dot on the platform pill,
-filter and badge. Rose is deliberately pink, not salmon, so an Instagram block is never mistaken
+Each platform also has an **edge**, a slightly stronger colour of the same hue, used for the small
+dot on the platform pill, filter and badge. A post block (week, month, day list) has no coloured
+stripe on any side: its pastel fill carries the platform, the name and icon are printed inside,
+and a 1 px inner hairline of the edge at 25% (`inset-ring-pf-<id>-edge/25`) plus the card
+shadow keeps adjacent and overlapping blocks of one platform apart in both themes. The selected
+block takes the 2 px ink outline; focus takes the focus ring. Rose is deliberately pink, not salmon, so an Instagram block is never mistaken
 for a Failed chip. Status stays a separate chip (icon and word); colour is never the only cue.
 
 | Platform | Light edge | Dark edge |
@@ -67,7 +70,7 @@ for a Failed chip. Status stays a separate chip (icon and word); colour is never
 | `bluesky` | `#1a7f4f` | `#4cc088` |
 
 Tokens: `--pf-<id>-bg`, `--pf-<id>-ink` and `--pf-<id>-edge`; Tailwind: `bg-pf-<id>
-text-pf-<id>-ink border-pf-<id>-edge`. In code use `platformBlock()` and `PlatformDot`.
+text-pf-<id>-ink bg-pf-<id>-edge` (dot) and `inset-ring-pf-<id>-edge/25` (block hairline). In code use `platformBlock()` and `PlatformDot`.
 
 ### Backdrop and banner
 

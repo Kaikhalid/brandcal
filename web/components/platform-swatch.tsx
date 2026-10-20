@@ -4,36 +4,37 @@ import { cn } from "@/lib/utils"
 
 // One pastel per platform id (examples/platforms.json uses the same ids). The name is always
 // printed: the colour never carries the meaning alone, and there is never a brand logo.
-// `edge` is the slightly stronger colour of a block's left border and of the small dots.
+// `edge` is the slightly stronger colour of the small dots; `hairline` is the same hue, faint,
+// as a 1 px inner ring that keeps adjacent blocks of one platform apart (no stripe on any side).
 const PLATFORM = {
   linkedin: {
     label: "LinkedIn",
     tone: "bg-pf-linkedin text-pf-linkedin-ink",
-    edge: "border-pf-linkedin-edge",
+    hairline: "inset-ring-pf-linkedin-edge/25",
     dot: "bg-pf-linkedin-edge",
   },
   x: {
     label: "X",
     tone: "bg-pf-x text-pf-x-ink",
-    edge: "border-pf-x-edge",
+    hairline: "inset-ring-pf-x-edge/25",
     dot: "bg-pf-x-edge",
   },
   instagram: {
     label: "Instagram",
     tone: "bg-pf-instagram text-pf-instagram-ink",
-    edge: "border-pf-instagram-edge",
+    hairline: "inset-ring-pf-instagram-edge/25",
     dot: "bg-pf-instagram-edge",
   },
   youtube: {
     label: "YouTube",
     tone: "bg-pf-youtube text-pf-youtube-ink",
-    edge: "border-pf-youtube-edge",
+    hairline: "inset-ring-pf-youtube-edge/25",
     dot: "bg-pf-youtube-edge",
   },
   bluesky: {
     label: "Bluesky",
     tone: "bg-pf-bluesky text-pf-bluesky-ink",
-    edge: "border-pf-bluesky-edge",
+    hairline: "inset-ring-pf-bluesky-edge/25",
     dot: "bg-pf-bluesky-edge",
   },
 } as const
@@ -51,11 +52,14 @@ export const platformLabel = (id: string) => (isKnown(id) ? PLATFORM[id].label :
 /** The pastel fill and its readable ink for a platform id (neutral for an unknown one). */
 export const platformTone = (id: string) => (isKnown(id) ? PLATFORM[id].tone : UNKNOWN_TONE)
 
-/** The pastel block of a post: fill, ink and a stronger left edge (neutral for an unknown id). */
+/**
+ * The pastel block of a post: fill and ink carry the platform (its name and icon are printed
+ * inside), a faint same-hue 1 px inner hairline separates neighbours. Neutral for an unknown id.
+ */
 export const platformBlock = (id: string) =>
   cn(
-    "border-l-4",
-    isKnown(id) ? `${PLATFORM[id].tone} ${PLATFORM[id].edge}` : "bg-muted text-ink border-control"
+    "inset-ring",
+    isKnown(id) ? `${PLATFORM[id].tone} ${PLATFORM[id].hairline}` : "bg-muted text-ink inset-ring-hairline"
   )
 
 /** A small round swatch in the platform's edge colour. Decorative: the name is always printed. */

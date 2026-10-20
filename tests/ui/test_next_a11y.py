@@ -351,14 +351,16 @@ def test_every_platform_has_its_own_block_colour_in_both_themes(
             seen = page.evaluate(
                 "() => Object.fromEntries([...document.querySelectorAll('button[data-post-id]')]"
                 ".map((b) => [b.querySelector('[data-platform]').dataset.platform,"
-                " getComputedStyle(b).backgroundColor + ' ' + getComputedStyle(b).borderLeftColor"
-                " + ' ' + getComputedStyle(b).borderLeftWidth]))"
+                " [getComputedStyle(b).backgroundColor, ['Top', 'Right', 'Bottom', 'Left']"
+                ".map((s) => getComputedStyle(b)['border' + s + 'Width']).join(' ')]]))"
             )
         finally:
             page.context.close()
         assert len(seen) >= 3, seen
-        assert len(set(seen.values())) == len(seen), seen  # a different look per platform
-        assert all(v.endswith("4px") for v in seen.values()), seen
+        fills = [fill for fill, _ in seen.values()]
+        assert len(set(fills)) == len(fills), seen  # the pastel fill alone tells platforms apart
+        # No accent stripe on any edge: the fill, the printed name and a faint inner hairline.
+        assert all(borders == "0px 0px 0px 0px" for _, borders in seen.values()), seen
 
 
 # -- b. the keyboard walk --------------------------------------------------------------------
