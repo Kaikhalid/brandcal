@@ -135,6 +135,8 @@ def evaluate(css: str) -> list[Row]:
         pair("control boundary on surface", "boundary", "control-boundary", "surface", NON_TEXT)
         pair("focus ring", "focus", "focus-ring", "canvas", NON_TEXT)
         pair("focus ring on surface", "focus", "focus-ring", "surface", NON_TEXT)
+        pair("dev banner text", "text", "banner-fg", "banner-bg", TEXT)
+        pair("dev banner icon", "state", "banner-fg", "banner-bg", NON_TEXT)
         pair("black pill text", "text", "pill-fg", "pill-bg", TEXT)
         pair("black pill against canvas", "state", "pill-bg", "canvas", NON_TEXT)
 
@@ -142,7 +144,12 @@ def evaluate(css: str) -> list[Row]:
         for platform in PLATFORMS:
             ink, bg = f"pf-{platform}-ink", f"pf-{platform}-bg"
             pair(f"platform {platform} text", "text", ink, bg, TEXT)
+            pair(f"platform {platform} edge", "state", f"pf-{platform}-edge", bg, NON_TEXT)
             backdrops[platform] = bg
+        for wash in ("wash-a", "wash-b"):
+            backdrops[wash] = wash
+            pair(f"ink on {wash}", "text", "ink", wash, TEXT)
+            pair(f"label on {wash}", "text", "label", wash, TEXT)
         for status in STATUSES:
             bg = f"st-{status}-bg"
             pair(f"status {status} text", "text", f"st-{status}-ink", bg, TEXT)

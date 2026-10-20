@@ -65,7 +65,7 @@ export function PostBadges({ post, compact }: { post: PostDetail; compact?: bool
       key={id}
       data-badge={id}
       title={text}
-      className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs leading-5 whitespace-nowrap text-ink"
+      className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs leading-5 text-ink"
     >
       <Icon aria-hidden="true" strokeWidth={1.5} className="size-3.5 shrink-0" />
       {compact ? <span className="sr-only">{text}</span> : text}

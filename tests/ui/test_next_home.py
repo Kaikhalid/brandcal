@@ -3,7 +3,8 @@
 Needs Playwright and chromium (see test_screens.py). Each route loads in light and dark with zero
 console errors, zero page errors and zero `securitypolicyviolation` events; shots go to
 build/ui-shots/next-<route>-<theme>.png. The axe runs are advisory: they write
-build/ui-shots/axe-next-*.json and warn on violations, but do not fail the build yet.
+build/ui-shots/axe-next-*.json and fail on any violation (test_next_a11y.py holds the rest of
+the accessibility gates).
 """
 
 from __future__ import annotations
@@ -11,7 +12,6 @@ from __future__ import annotations
 import json
 import re
 import threading
-import warnings
 from collections.abc import Iterator
 from typing import Any
 
@@ -152,13 +152,13 @@ def shot(page: Any, name: str) -> None:
 
 
 def axe_report(page: Any, name: str) -> list[str]:
-    """Advisory: write build/ui-shots/axe-<name>.json and warn; returns the violation ids."""
+    """Blocking: write build/ui-shots/axe-<name>.json and fail on any violation (the MVP tests in
+    test_screens.py keep their own advisory helper). "Needs review" items are only reported."""
     found = run_axe(page)
     SHOTS.mkdir(parents=True, exist_ok=True)
     (SHOTS / f"axe-{name}.json").write_text(json.dumps(found, indent=2) + "\n", encoding="utf-8")
-    ids = [f"{v['id']} x{v['count']}" for v in found["violations"]]
-    if ids:
-        warnings.warn(f"axe ({name}): {', '.join(ids)}", stacklevel=2)
+    ids = [f"{v['id']} x{v['count']} {v['targets']}" for v in found["violations"]]
+    assert not ids, f"axe ({name}): {'; '.join(ids)}"
     return ids
 
 
@@ -461,7 +461,7 @@ def test_the_dev_server_shows_a_permanent_red_read_only_banner(
 def test_axe_report_for_each_route(
     browser: Any, site: tuple[str, str], path: str, scheme: str
 ) -> None:
-    """Advisory: writes the findings to build/ui-shots/ and warns; it does not fail yet."""
+    """Writes the findings to build/ui-shots/ and fails on any violation."""
     page, _ = open_page(browser, site, path, scheme)
     ids = axe_report(page, f"next-{ROUTES[path]}-{scheme}")
     page.context.close()

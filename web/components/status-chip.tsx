@@ -77,7 +77,8 @@ function StatusChip({ status, className }: { status: string; className?: string 
       data-status={status}
       title={status}
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-full pr-3 pl-2.5 text-[0.8125rem] leading-none whitespace-nowrap",
+        // min-h, not h, and no nowrap: wider text spacing wraps the word instead of spilling out.
+        "inline-flex min-h-7 max-w-full items-center gap-1.5 rounded-full py-1 pr-3 pl-2.5 text-[0.8125rem] leading-tight",
         tone,
         className
       )}

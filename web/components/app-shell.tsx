@@ -42,17 +42,18 @@ function AppShell({ children }: { children: React.ReactNode }) {
     <AppDataProvider>
       <NoticeProvider>
       <TooltipProvider delay={300}>
-        <a
-          href="#main"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[60] focus:rounded-full focus:bg-pill focus:px-5 focus:py-3 focus:text-sm focus:text-pill-foreground"
-        >
-          Skip to main content
-        </a>
         <DevBanner />
         <SidebarProvider>
           <Shortcuts />
-          {/* Inert while the post panel overlays the page (below 1200px); see post-panel.tsx. */}
+          {/* Inert while the post panel overlays the page (below 1200px); see post-panel.tsx. The
+              skip link lives inside it so a modal panel cannot be left by Tab. */}
           <div id="shell-body" className="contents">
+            <a
+              href="#main"
+              className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[60] focus:rounded-full focus:bg-pill focus:px-5 focus:py-3 focus:text-sm focus:text-pill-foreground"
+            >
+              Skip to main content
+            </a>
             <AppSidebar />
             <div className="flex min-w-0 flex-1 flex-col">
               <header className="glass sticky top-(--shell-top) z-20 flex h-16 items-center justify-between gap-3 px-4 md:px-6">
@@ -63,7 +64,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
                 id="main"
                 tabIndex={-1}
                 className={cn(
-                  "mx-auto w-full flex-1 px-6 py-10 outline-none md:py-14",
+                  // pb-32 leaves room to scroll the last controls clear of the notice card.
+                  "mx-auto w-full flex-1 px-6 pt-10 pb-32 outline-none md:pt-14",
                   wide ? "max-w-[88rem]" : "max-w-5xl"
                 )}
               >

@@ -120,9 +120,11 @@ button that is not allowed is shown **disabled with the refusal it would produce
 `brandcal serve` (new command, admin) starts a stdlib `http.server` (threaded) that:
 
 - binds to **127.0.0.1 only**; there is no option to bind elsewhere;
-- serves a JSON API under `/api/` and static files (vanilla JS, CSS, an SVG sprite) shipped
-  inside the package under `brandcal/web/`;
-- needs **no npm, no build step and no new runtime dependency**;
+- serves a JSON API under `/api/` and static files shipped inside the package: `/` is the
+  Next.js static export committed in `src/brandcal/web_next/`, and the first vanilla-JS views
+  (CSS, an SVG sprite) stay at `/mvp/` under `brandcal/web/`;
+- needs **no npm and no new runtime dependency** at run time: Node builds the export, and only
+  maintainers run that build (`python scripts/build_ui.py`), so pip users never need Node;
 - opens the database per request, using the same action layer as the CLI, so triggers, hash
   chains and the audit apply unchanged;
 - refuses to start without `BRANDCAL_HOME`, a configured timezone and a `serve` config block
@@ -228,8 +230,11 @@ override `serve.port`):
   the same set (guards against DNS rebinding). Otherwise `BAD_ORIGIN`.
 - A CSRF token from `GET /api/session`, bound to the identity and sent as `X-Brandcal-CSRF`;
   a missing or wrong token is `BAD_ORIGIN`.
-- `Content-Security-Policy: default-src 'self'`, no inline script, `X-Content-Type-Options:
-  nosniff`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store` on API responses.
+- `Content-Security-Policy: default-src 'self'`; inline scripts and styles are allowed only by
+  the per-page `sha256` hashes the build writes to `csp.json` (`script-src 'self' 'sha256-...'`),
+  never `'unsafe-inline'` or `'unsafe-eval'`; the MVP at `/mvp/` has no inline script at all.
+  Also `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and
+  `Cache-Control: no-store` on API responses.
 - All user text is inserted with `textContent`, never as HTML.
 - Request body limit 256 KiB; no directory listing; static files from an allow-list.
 

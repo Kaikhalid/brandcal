@@ -27,14 +27,21 @@
 
   --color-pf-linkedin: var(--pf-linkedin-bg);
   --color-pf-linkedin-ink: var(--pf-linkedin-ink);
+  --color-pf-linkedin-edge: var(--pf-linkedin-edge);
   --color-pf-x: var(--pf-x-bg);
   --color-pf-x-ink: var(--pf-x-ink);
+  --color-pf-x-edge: var(--pf-x-edge);
   --color-pf-instagram: var(--pf-instagram-bg);
   --color-pf-instagram-ink: var(--pf-instagram-ink);
+  --color-pf-instagram-edge: var(--pf-instagram-edge);
   --color-pf-youtube: var(--pf-youtube-bg);
   --color-pf-youtube-ink: var(--pf-youtube-ink);
+  --color-pf-youtube-edge: var(--pf-youtube-edge);
   --color-pf-bluesky: var(--pf-bluesky-bg);
   --color-pf-bluesky-ink: var(--pf-bluesky-ink);
+  --color-pf-bluesky-edge: var(--pf-bluesky-edge);
+  --color-banner: var(--banner-bg);
+  --color-banner-foreground: var(--banner-fg);
 
   --color-st-draft: var(--st-draft-bg);
   --color-st-draft-ink: var(--st-draft-ink);
@@ -119,16 +126,30 @@
   --focus-ring: #111113;
 
   /* Platform pastels: fill plus the ink that is readable on it. */
-  --pf-linkedin-bg: #d5e7f8;
-  --pf-linkedin-ink: #174a78;
-  --pf-x-bg: #e5def6;
-  --pf-x-ink: #3f2c75;
-  --pf-instagram-bg: #f8dada;
-  --pf-instagram-ink: #7b2233;
-  --pf-youtube-bg: #f6ebc0;
+  --pf-linkedin-bg: #c9e1fa;
+  --pf-linkedin-ink: #0f3f6b;
+  --pf-linkedin-edge: #2f78c4;
+  --pf-x-bg: #ddd3f8;
+  --pf-x-ink: #36246b;
+  --pf-x-edge: #7b5bd6;
+  --pf-instagram-bg: #f7cfe6;
+  --pf-instagram-ink: #6e1a55;
+  --pf-instagram-edge: #c23a95;
+  --pf-youtube-bg: #f7e5a0;
   --pf-youtube-ink: #5a4600;
-  --pf-bluesky-bg: #d3efe0;
-  --pf-bluesky-ink: #12583a;
+  --pf-youtube-edge: #8f6a00;
+  --pf-bluesky-bg: #c4ebd6;
+  --pf-bluesky-ink: #0f5236;
+  --pf-bluesky-edge: #1a7f4f;
+
+  /* The page backdrop: a faint wash behind the shell so the sidebar glass has something to
+     frost. Content cards stay solid on top of it. */
+  --wash-a: #e4e2f1;
+  --wash-b: #dfeaee;
+
+  /* The permanent dev-unverified banner: a deep warning red with white text. */
+  --banner-bg: #b3261e;
+  --banner-fg: #ffffff;
 
   /* Status chips: always an icon and a word as well as the colour. */
   --st-draft-bg: #e7e7e3;
@@ -209,16 +230,27 @@
   --pill-fg: #111113;
   --focus-ring: #f2f2f0;
 
-  --pf-linkedin-bg: #1e3750;
-  --pf-linkedin-ink: #c5def6;
-  --pf-x-bg: #352d52;
-  --pf-x-ink: #dcd2fa;
-  --pf-instagram-bg: #4a2a30;
-  --pf-instagram-ink: #f8cfd3;
-  --pf-youtube-bg: #43391a;
-  --pf-youtube-ink: #f3e3a6;
-  --pf-bluesky-bg: #1d3d2f;
-  --pf-bluesky-ink: #bdebd3;
+  --pf-linkedin-bg: #1b3a5c;
+  --pf-linkedin-ink: #cfe4fa;
+  --pf-linkedin-edge: #5aa2e8;
+  --pf-x-bg: #3a2f63;
+  --pf-x-ink: #e2d9fb;
+  --pf-x-edge: #9a82ee;
+  --pf-instagram-bg: #5a2147;
+  --pf-instagram-ink: #fbd3ea;
+  --pf-instagram-edge: #e268b4;
+  --pf-youtube-bg: #4a3d12;
+  --pf-youtube-ink: #f5e6a3;
+  --pf-youtube-edge: #d9aa2a;
+  --pf-bluesky-bg: #17443a;
+  --pf-bluesky-ink: #c6f0da;
+  --pf-bluesky-edge: #4cc088;
+
+  --wash-a: #1a1a2b;
+  --wash-b: #102226;
+
+  --banner-bg: #8c1d18;
+  --banner-fg: #fff1ef;
 
   --st-draft-bg: #2b2b2f;
   --st-draft-ink: #d0d0d6;
@@ -257,9 +289,17 @@
        shell bar sits below it, so scrolled focus must clear both (WCAG 2.4.11). */
     --shell-top: 0px;
     scroll-padding-top: calc(var(--shell-top) + 5.5rem);
+    /* The notice card sits at the bottom right; a scrolled focus must clear it (WCAG 2.4.11). */
+    scroll-padding-bottom: 7rem;
   }
   body {
     @apply bg-background text-foreground;
+    /* A faint wash behind the shell, fixed to the viewport, so the sidebar glass is visibly
+       frosted but quiet. Both washes are contrast-checked (scripts/ui_contrast.py). */
+    background-image:
+      radial-gradient(60rem 44rem at 0% 0%, var(--wash-a), transparent 70%),
+      radial-gradient(56rem 40rem at 100% 100%, var(--wash-b), transparent 70%);
+    background-attachment: fixed;
   }
   h1,
   h2,

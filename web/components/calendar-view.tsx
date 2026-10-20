@@ -6,7 +6,7 @@ import * as React from "react"
 import { EmptyState } from "@/components/empty-state"
 import { ErrorPanel } from "@/components/error-panel"
 import { FiltersBar, pillClass } from "@/components/filters-bar"
-import { PlatformMark, platformTone } from "@/components/platform-swatch"
+import { PlatformMark, platformBlock } from "@/components/platform-swatch"
 import { PostBadges, TypeIcon, useOpenPost } from "@/components/post-bits"
 import { StatusChip } from "@/components/status-chip"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -113,14 +113,15 @@ function Block({
       onClick={(e) => open(row.id, e.currentTarget)}
       style={{
         top: `calc(var(--hour) * ${span.startMin / 60})`,
-        height: `calc(var(--hour) * ${(end - span.startMin) / 60} - 4px)`,
+        // A minimum, not a fixed height: wider text spacing grows the block instead of clipping it.
+        minHeight: `calc(var(--hour) * ${(end - span.startMin) / 60} - 4px)`,
         left: `calc(${(lane / lanes) * 100}% + 2px)`,
         width: `calc(${100 / lanes}% - 4px)`,
       }}
       className={cn(
-        "press absolute flex flex-col items-start gap-1 overflow-hidden rounded-control p-2.5 text-left shadow-card",
+        "press absolute flex flex-col items-start gap-1 rounded-control p-2.5 text-left shadow-card hover:z-[6] focus-visible:z-[6]",
         "hover:brightness-[0.97] aria-[current=true]:outline-2 aria-[current=true]:outline-ink",
-        platformTone(row.platform)
+        platformBlock(row.platform)
       )}
     >
       <span className="text-sm leading-snug font-medium break-words">{row.title}</span>
@@ -134,7 +135,7 @@ function Block({
           {detail.post_type}
         </span>
       </span>
-      <StatusChip status={row.status} className="h-6 text-xs" />
+      <StatusChip status={row.status} className="min-h-6 gap-1 px-2 text-xs" />
       <PostBadges post={detail} />
     </button>
   )
@@ -156,7 +157,7 @@ function Card({ entry: { item, span }, open, current, compact }: Common & { comp
         "press flex w-full flex-col items-start gap-1.5 rounded-control text-left shadow-card",
         "hover:brightness-[0.97] aria-[current=true]:outline-2 aria-[current=true]:outline-ink",
         compact ? "p-2" : "p-4",
-        platformTone(row.platform)
+        platformBlock(row.platform)
       )}
     >
       <span className="flex w-full min-w-0 items-baseline gap-2">
@@ -179,7 +180,7 @@ function Card({ entry: { item, span }, open, current, compact }: Common & { comp
           </>
         )}
       </span>
-      <StatusChip status={row.status} className="h-6 text-xs" />
+      <StatusChip status={row.status} className="min-h-6 gap-1 px-2 text-xs" />
       {!compact && <PostBadges post={detail} />}
     </button>
   )

@@ -520,13 +520,18 @@ function Panel({ id }: { id: string }) {
         "min-[1200px]:sticky min-[1200px]:z-10 min-[1200px]:h-[calc(100svh-var(--shell-top))] min-[1200px]:w-[30rem] min-[1200px]:shrink-0 min-[1200px]:self-start"
       )}
     >
-      <div className="flex flex-col gap-7 p-6">
+      {/* pb-32: the last rows can scroll clear of the notice card at the bottom right (2.4.11). */}
+      <div className="flex flex-col gap-7 p-6 pb-32">
         <div className="flex items-start justify-between gap-3">
           <h2
             id="panel-title"
             ref={heading}
             tabIndex={-1}
-            className="rounded-control text-2xl leading-tight tracking-tight"
+            // Focus lands here when the panel opens (tabindex=-1, never in the Tab order). It is
+            // not a control, so it shows no ring: Chromium counts focus on a deep link as
+            // :focus-visible, and any ring around a short title reads as a button. Keyboard focus
+            // on every control keeps the global ring.
+            className="text-2xl leading-tight tracking-tight outline-none focus:outline-none focus-visible:outline-none"
           >
             {title}
           </h2>
@@ -543,7 +548,7 @@ function Panel({ id }: { id: string }) {
           <div
             role="alert"
             data-stale-banner
-            className="sticky top-4 z-10 flex gap-3 rounded-inner bg-st-awaiting p-4 text-sm text-st-awaiting-ink shadow-float"
+            className="flex gap-3 rounded-inner bg-st-awaiting p-4 text-sm text-st-awaiting-ink"
           >
             <TriangleAlert aria-hidden="true" strokeWidth={1.5} className="mt-0.5 size-5 shrink-0" />
             <p>{banner}</p>
