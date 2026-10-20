@@ -93,12 +93,46 @@ jobs:
         run: python -m playwright install --with-deps chromium
       - name: Install fonts
         run: sudo apt-get install -y fonts-inter
-      - name: Screenshot tests
-        run: pytest tests/ui -q
+      - name: Screenshot tests (the MVP at /mvp/)
+        run: pytest tests/ui/test_screens.py -q
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ui-shots
+          path: build/ui-shots
+          if-no-files-found: warn
+
+  ui-next:
+    name: ui-next (blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install web dependencies (axe-core)
+        run: npm ci
+        working-directory: web
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,crypto,ui-test]"
+      - name: Install chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Install fonts
+        run: sudo apt-get install -y fonts-inter
+      - name: New UI tests (axe, keyboard, reflow, contrast, shots)
+        run: pytest tests/ui/test_next_*.py -q -k "not test_screens"
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-next-shots
           path: build/ui-shots
           if-no-files-found: warn

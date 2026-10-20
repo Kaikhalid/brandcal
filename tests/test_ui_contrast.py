@@ -71,6 +71,7 @@ def test_the_checks_cover_every_platform_and_status_in_both_themes() -> None:
         names = {r.name for r in rows if r.theme == theme}
         for platform in PLATFORMS:
             assert f"platform {platform} text" in names, (theme, platform)
+            assert f"platform {platform} edge" in names, (theme, platform)
         for status in STATUSES:
             assert f"status {status} text" in names, (theme, status)
             assert f"status {status} icon" in names, (theme, status)

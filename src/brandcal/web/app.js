@@ -139,7 +139,8 @@
   function readUrl() {
     const q = new URLSearchParams(location.search);
     state.view = q.get("view") === "month" ? "month" : "week";
-    state.date = /^\d{4}-\d{2}-\d{2}$/.test(q.get("date") || "") ? q.get("date") : today();
+    // No date in the URL: "today" needs the schema's zone, so start() fills it in once loaded.
+    state.date = /^\d{4}-\d{2}-\d{2}$/.test(q.get("date") || "") ? q.get("date") : "";
     state.platform = q.get("platform") || "";
     state.type = q.get("type") || "";
     state.status = new Set((q.get("status") || "").split(",").filter(Boolean));
@@ -685,6 +686,7 @@
       const [session, schema] = await Promise.all([getJson("/api/session"), getJson("/api/schema")]);
       state.session = session;
       state.schema = schema;
+      if (!state.date) state.date = today();
       if (session.source === "dev-unverified") {
         const banner = $("banner");
         banner.textContent = "UNVERIFIED (dev): no identity is checked and every change is refused.";

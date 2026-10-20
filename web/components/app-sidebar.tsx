@@ -21,6 +21,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { isCurrent, NAV_SECTIONS, type NavItem } from "@/lib/nav"
+import { cn } from "@/lib/utils"
 
 function NavLink({ item, count }: { item: NavItem; count: number | null }) {
   const pathname = usePathname()
@@ -33,13 +34,13 @@ function NavLink({ item, count }: { item: NavItem; count: number | null }) {
     <SidebarMenuItem>
       <SidebarMenuButton
         isActive={active}
-        tooltip={waiting ? `${item.label} (${count})` : item.label}
+        tooltip={`${item.label}${waiting ? ` (${count})` : ""} · g then ${item.key}`}
         aria-current={active ? "page" : undefined}
         // No prefetch: Next probes each page with HEAD, which the server refuses (UI_SPEC 2.2).
         render={<Link href={item.href} prefetch={false} onClick={() => setOpenMobile(false)} />}
       >
         <Icon aria-hidden="true" strokeWidth={1.5} />
-        <span>{item.label}</span>
+        <span className="whitespace-nowrap">{item.label}</span>
         {waiting && (
           <>
             <Badge
@@ -57,7 +58,12 @@ function NavLink({ item, count }: { item: NavItem; count: number | null }) {
         )}
         <KbdGroup
           aria-hidden="true"
-          className={waiting ? "group-data-[collapsible=icon]:hidden" : "ml-auto group-data-[collapsible=icon]:hidden"}
+          // Shown only for the row under the pointer or the keyboard (and in the collapsed rail's
+          // tooltip); the full list lives in Settings. Opacity, not display, so rows never reflow.
+          className={cn(
+            "opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 group-data-[collapsible=icon]:hidden",
+            !waiting && "ml-auto"
+          )}
         >
           <Kbd>g</Kbd>
           <Kbd>{item.key}</Kbd>

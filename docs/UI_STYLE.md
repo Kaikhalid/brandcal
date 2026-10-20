@@ -47,13 +47,35 @@ One pastel per platform id. The ink is the readable colour on it. The name is al
 
 | Platform | Pastel | Light bg / ink | Dark bg / ink |
 |---|---|---|---|
-| `linkedin` | sky | `#d5e7f8` / `#174a78` | `#1e3750` / `#c5def6` |
-| `x` | lilac | `#e5def6` / `#3f2c75` | `#352d52` / `#dcd2fa` |
-| `instagram` | blush | `#f8dada` / `#7b2233` | `#4a2a30` / `#f8cfd3` |
-| `youtube` | butter | `#f6ebc0` / `#5a4600` | `#43391a` / `#f3e3a6` |
-| `bluesky` | mint | `#d3efe0` / `#12583a` | `#1d3d2f` / `#bdebd3` |
+| `linkedin` | sky | `#c9e1fa` / `#0f3f6b` | `#1b3a5c` / `#cfe4fa` |
+| `x` | lilac | `#ddd3f8` / `#36246b` | `#3a2f63` / `#e2d9fb` |
+| `instagram` | rose | `#f7cfe6` / `#6e1a55` | `#5a2147` / `#fbd3ea` |
+| `youtube` | butter | `#f7e5a0` / `#5a4600` | `#4a3d12` / `#f5e6a3` |
+| `bluesky` | mint | `#c4ebd6` / `#0f5236` | `#17443a` / `#c6f0da` |
 
-Tokens: `--pf-<id>-bg` and `--pf-<id>-ink`; Tailwind: `bg-pf-<id> text-pf-<id>-ink`.
+Each platform also has an **edge**, a slightly stronger colour of the same hue, used for the 4 px
+left border of a post block (week, month, day list) and for the small dot on the platform pill,
+filter and badge. Rose is deliberately pink, not salmon, so an Instagram block is never mistaken
+for a Failed chip. Status stays a separate chip (icon and word); colour is never the only cue.
+
+| Platform | Light edge | Dark edge |
+|---|---|---|
+| `linkedin` | `#2f78c4` | `#5aa2e8` |
+| `x` | `#7b5bd6` | `#9a82ee` |
+| `instagram` | `#c23a95` | `#e268b4` |
+| `youtube` | `#8f6a00` | `#d9aa2a` |
+| `bluesky` | `#1a7f4f` | `#4cc088` |
+
+Tokens: `--pf-<id>-bg`, `--pf-<id>-ink` and `--pf-<id>-edge`; Tailwind: `bg-pf-<id>
+text-pf-<id>-ink border-pf-<id>-edge`. In code use `platformBlock()` and `PlatformDot`.
+
+### Backdrop and banner
+
+`--wash-a` (`#e4e2f1` / `#1a1a2b`) and `--wash-b` (`#dfeaee` / `#102226`) are two faint radial
+washes, fixed to the viewport behind the shell, so the sidebar glass has something to frost.
+Content cards, the week grid, blocks and dialogs stay solid. `--banner-bg` / `--banner-fg`
+(`#b3261e` / `#ffffff` light, `#8c1d18` / `#fff1ef` dark) colour the permanent dev-unverified
+banner: a deep warning red in both themes, never the salmon of `--destructive` in dark.
 
 ### Status chips
 
@@ -70,7 +92,7 @@ monochrome) or for any pastel. Tokens: `--st-<name>-bg` and `--st-<name>-ink`.
 
 ## 3. Contrast (computed)
 
-Run `python scripts/ui_contrast.py` for every pair (90 rows). `tests/test_ui_contrast.py` fails
+Run `python scripts/ui_contrast.py` for every pair (120 rows). `tests/test_ui_contrast.py` fails
 the build below 4.5:1 for text and 3:1 for control boundaries, focus rings, the pill's state cue
 and status chip icons. Glass text is checked on the translucent fill flattened over the canvas,
 the card and each pastel. Values below are light / dark and come from that script.
@@ -81,14 +103,21 @@ the card and each pastel. Values below are light / dark and come from that scrip
 | label on canvas / surface / muted | 5.89 / 6.42 / 5.53 | 7.70 / 7.00 / 6.25 | 4.5 |
 | destructive on canvas | 5.99 | 8.45 | 4.5 |
 | black pill text on pill | 18.06 | 16.83 | 4.5 |
-| platform ink on pastel (lowest of five) | 6.92 | 8.82 | 4.5 |
+| platform ink on pastel (lowest of five) | 7.10 | 8.50 | 4.5 |
+| platform edge on its pastel (lowest of five) | 3.40 | 3.85 | 3 |
+| ink / label on wash-a and wash-b (lowest) | 14.77 / 5.03 | 14.65 / 6.56 | 4.5 |
+| dev banner text and icon | 6.54 | 8.28 | 4.5 / 3 |
 | status chip text (lowest of five) | 6.63 | 7.86 | 4.5 |
 | status chip icon (lowest of five) | 6.63 | 7.86 | 3 |
 | control boundary on canvas / surface | 3.35 / 3.66 | 3.88 / 3.53 | 3 |
 | focus ring on canvas / surface | 17.28 / 18.86 | 17.20 / 15.65 | 3 |
 | black pill against canvas | 17.28 | 17.20 | 3 |
-| glass label, worst backdrop | 5.98 | 6.34 | 4.5 |
-| glass ink, worst backdrop | 17.56 | 14.16 | 4.5 |
+| glass label, worst backdrop | 5.86 | 6.25 | 4.5 |
+| glass ink, worst backdrop | 17.21 | 13.97 | 4.5 |
+
+The script checks the tokens. `tests/ui/test_next_a11y.py` also computes the contrast of what is
+actually rendered (text 4.5:1, icons 3:1, chip borders 3:1, glass composited over the canvas) on
+the week blocks and on the panel over glass, in both themes.
 
 Rules the numbers back up: never use `--hairline` as the only boundary of a control; never put
 `--label` on a pastel (use that pastel's ink); never set text below 4.5:1 because it is "large"
@@ -198,6 +227,12 @@ avoid `style` props in components: the hashes cover only what is in the built HT
 - `python scripts/ui_contrast.py` and `tests/test_ui_contrast.py`: the contrast gate.
 - `tests/ui/test_next_home.py`: `/` and `/mvp/` in light and dark with zero console errors and
   zero CSP violations; screenshots in `build/ui-shots/`.
-- axe-core (`wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, `wcag22aa`) runs on `/` in both themes
-  and writes `build/ui-shots/axe-next-home-*.json`. It is advisory for now.
-- Not covered by automation: keyboard walk, 320 px reflow, text spacing, drag alternatives.
+- axe-core (`wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, `wcag22aa`) is a failing assertion on
+  every route in both themes, with the panel closed and open, the collapsed rail, the phone sheet
+  and each write dialog. Reports go to `build/ui-shots/axe-next-*.json`.
+- `tests/ui/test_next_a11y.py` (blocking in CI as `ui-next`): rendered contrast, the keyboard walk
+  (visible 3:1 focus indicator, not hidden, layout order, no trap, Shift+Tab back), focus into and
+  back out of the panel and dialogs, reflow at 320 px, text spacing (1.4.12), 200% zoom, reduced
+  motion and transparency, target size, the now line and the notice timer.
+- Not covered by automation: drag alternatives, screen-reader output, real devices.
+- The design and accessibility review that led to these gates is in [UI_REVIEW_N4.md](UI_REVIEW_N4.md).

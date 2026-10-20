@@ -33,7 +33,7 @@ function DevBanner() {
       ref={ref}
       role="status"
       data-dev-banner
-      className="sticky top-0 z-50 flex items-center justify-center gap-3 bg-destructive px-4 py-2 text-center text-sm text-surface"
+      className="sticky top-0 z-50 flex items-center justify-center gap-3 bg-banner px-4 py-2 text-center text-sm text-banner-foreground"
     >
       <ShieldAlert aria-hidden="true" strokeWidth={1.5} className="size-5 shrink-0" />
       <p>

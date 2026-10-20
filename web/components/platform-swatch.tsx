@@ -4,12 +4,38 @@ import { cn } from "@/lib/utils"
 
 // One pastel per platform id (examples/platforms.json uses the same ids). The name is always
 // printed: the colour never carries the meaning alone, and there is never a brand logo.
+// `edge` is the slightly stronger colour of a block's left border and of the small dots.
 const PLATFORM = {
-  linkedin: { label: "LinkedIn", tone: "bg-pf-linkedin text-pf-linkedin-ink" },
-  x: { label: "X", tone: "bg-pf-x text-pf-x-ink" },
-  instagram: { label: "Instagram", tone: "bg-pf-instagram text-pf-instagram-ink" },
-  youtube: { label: "YouTube", tone: "bg-pf-youtube text-pf-youtube-ink" },
-  bluesky: { label: "Bluesky", tone: "bg-pf-bluesky text-pf-bluesky-ink" },
+  linkedin: {
+    label: "LinkedIn",
+    tone: "bg-pf-linkedin text-pf-linkedin-ink",
+    edge: "border-pf-linkedin-edge",
+    dot: "bg-pf-linkedin-edge",
+  },
+  x: {
+    label: "X",
+    tone: "bg-pf-x text-pf-x-ink",
+    edge: "border-pf-x-edge",
+    dot: "bg-pf-x-edge",
+  },
+  instagram: {
+    label: "Instagram",
+    tone: "bg-pf-instagram text-pf-instagram-ink",
+    edge: "border-pf-instagram-edge",
+    dot: "bg-pf-instagram-edge",
+  },
+  youtube: {
+    label: "YouTube",
+    tone: "bg-pf-youtube text-pf-youtube-ink",
+    edge: "border-pf-youtube-edge",
+    dot: "bg-pf-youtube-edge",
+  },
+  bluesky: {
+    label: "Bluesky",
+    tone: "bg-pf-bluesky text-pf-bluesky-ink",
+    edge: "border-pf-bluesky-edge",
+    dot: "bg-pf-bluesky-edge",
+  },
 } as const
 
 export type Platform = keyof typeof PLATFORM
@@ -25,6 +51,28 @@ export const platformLabel = (id: string) => (isKnown(id) ? PLATFORM[id].label :
 /** The pastel fill and its readable ink for a platform id (neutral for an unknown one). */
 export const platformTone = (id: string) => (isKnown(id) ? PLATFORM[id].tone : UNKNOWN_TONE)
 
+/** The pastel block of a post: fill, ink and a stronger left edge (neutral for an unknown id). */
+export const platformBlock = (id: string) =>
+  cn(
+    "border-l-4",
+    isKnown(id) ? `${PLATFORM[id].tone} ${PLATFORM[id].edge}` : "bg-muted text-ink border-control"
+  )
+
+/** A small round swatch in the platform's edge colour. Decorative: the name is always printed. */
+function PlatformDot({ platform, className }: { platform: string; className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      data-platform-dot={platform}
+      className={cn(
+        "inline-block size-2.5 shrink-0 rounded-full",
+        isKnown(platform) ? PLATFORM[platform].dot : "bg-control",
+        className
+      )}
+    />
+  )
+}
+
 /** Icon and name with no fill, for text that already sits on the platform's pastel. */
 function PlatformMark({ platform, className }: { platform: string; className?: string }) {
   const Icon = isKnown(platform) ? Megaphone : Globe
@@ -38,18 +86,16 @@ function PlatformMark({ platform, className }: { platform: string; className?: s
 
 /** A small pill: pastel, icon, name. */
 function PlatformBadge({ platform, className }: { platform: string; className?: string }) {
-  const known = isKnown(platform)
-  const Icon = known ? Megaphone : Globe
   return (
     <span
       data-platform={platform}
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-full pr-3 pl-2.5 text-[0.8125rem] leading-none whitespace-nowrap",
-        known ? PLATFORM[platform].tone : UNKNOWN_TONE,
+        "inline-flex min-h-7 max-w-full items-center gap-2 rounded-full px-3 py-1 text-[0.8125rem] leading-tight",
+        platformTone(platform),
         className
       )}
     >
-      <Icon aria-hidden="true" strokeWidth={1.5} className="size-4 shrink-0" />
+      <PlatformDot platform={platform} />
       {platformLabel(platform)}
     </span>
   )
@@ -71,4 +117,4 @@ function PlatformSwatch({ platform, className }: { platform: string; className?:
   )
 }
 
-export { PlatformBadge, PlatformMark, PlatformSwatch }
+export { PlatformBadge, PlatformDot, PlatformMark, PlatformSwatch }

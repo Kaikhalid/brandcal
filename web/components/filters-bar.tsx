@@ -4,7 +4,7 @@ import { SlidersHorizontal } from "lucide-react"
 import * as React from "react"
 
 import { useAppData } from "@/components/app-data"
-import { platformLabel } from "@/components/platform-swatch"
+import { PlatformDot, platformLabel } from "@/components/platform-swatch"
 import { statusLabel } from "@/components/status-chip"
 import type { Schema } from "@/lib/api"
 import { FILTER_KEYS, moreCount, parseFilters, useUrlState, type Filters } from "@/lib/url-state"
@@ -162,6 +162,9 @@ export function FiltersBar({ closedByDefault }: { closedByDefault: boolean }) {
   const { params, set } = useUrlState()
   const filters = parseFilters(params)
   const role = session.state === "ok" ? session.data.role : null
+  // Below 640 px the pills fold into one "Filters" disclosure so they do not push the content down.
+  const [folded, setFolded] = React.useState(false)
+  const groupsId = React.useId()
   if (schema.state !== "ok") return null
 
   const toggle = (key: "status" | "platform", id: string) => {
@@ -179,33 +182,55 @@ export function FiltersBar({ closedByDefault }: { closedByDefault: boolean }) {
     },
   ] as const
 
+  const activeCount = filters.platform.length + filters.status.length + moreCount(filters)
+
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-      {groups.map(({ key, label, ids, text }) => (
-        <div key={key} role="group" aria-label={label} className="flex flex-wrap items-center gap-2">
-          {ids.map((id) => {
-            const on = filters[key].includes(id)
-            return (
-              <button
-                key={id}
-                type="button"
-                aria-pressed={on}
-                data-filter={`${key}:${id}`}
-                onClick={() => toggle(key, id)}
-                className={pillClass(on)}
-              >
-                {text(id)}
-              </button>
-            )
-          })}
-        </div>
-      ))}
-      <MoreFilters
-        schema={schema.data}
-        filters={filters}
-        closedByDefault={closedByDefault}
-        set={set}
-      />
+    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6">
+      <button
+        type="button"
+        aria-expanded={folded}
+        aria-controls={groupsId}
+        onClick={() => setFolded(!folded)}
+        data-filters-toggle
+        className={cn(pillClass(activeCount > 0), "w-fit gap-2 sm:hidden")}
+      >
+        <SlidersHorizontal aria-hidden="true" strokeWidth={1.5} className="size-4" />
+        Filters{activeCount > 0 && <span className="tabular-nums"> ({activeCount})</span>}
+      </button>
+      <div
+        id={groupsId}
+        className={cn(
+          "flex-col gap-3 sm:flex sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6",
+          folded ? "flex" : "hidden"
+        )}
+      >
+        {groups.map(({ key, label, ids, text }) => (
+          <div key={key} role="group" aria-label={label} className="flex flex-wrap items-center gap-2">
+            {ids.map((id) => {
+              const on = filters[key].includes(id)
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={on}
+                  data-filter={`${key}:${id}`}
+                  onClick={() => toggle(key, id)}
+                  className={cn(pillClass(on), key === "platform" && "gap-2")}
+                >
+                  {key === "platform" && <PlatformDot platform={id} />}
+                  {text(id)}
+                </button>
+              )
+            })}
+          </div>
+        ))}
+        <MoreFilters
+          schema={schema.data}
+          filters={filters}
+          closedByDefault={closedByDefault}
+          set={set}
+        />
+      </div>
       {active && (
         <button
           type="button"
