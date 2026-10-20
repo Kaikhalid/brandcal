@@ -1,0 +1,4 @@
+# Copy to .dev.vars for `wrangler dev` only. These values are fake; never commit a real secret.
+RELAY_SECRET=fake-secret-for-local-dev-only
+# The repo has no timezone default: set the offset your deployment shows, for example +03:00.
+DISPLAY_UTC_OFFSET=+03:00

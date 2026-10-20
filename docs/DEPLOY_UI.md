@@ -10,6 +10,9 @@ only way in is the tunnel, and Access sits in front of the tunnel. brandcal stil
 Access JWT itself on every request (UI_SPEC 2.3), so a request that somehow bypasses Access is
 refused with `IDENTITY_UNVERIFIED`.
 
+If the host cannot reach the tunnel edge (`cloudflared` needs outbound port 7844), use the
+Cloudflare Worker relay instead: [DEPLOY_RELAY.md](DEPLOY_RELAY.md).
+
 ## 1. Before you start
 
 - A Cloudflare zone for the hostname (here `example.com`), with DNS on Cloudflare.
