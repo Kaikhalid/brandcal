@@ -3,7 +3,7 @@
 import { Share2 } from "lucide-react"
 import * as React from "react"
 
-import type { Loadable } from "@/components/app-data"
+import { useAppData, type Loadable } from "@/components/app-data"
 import { EmptyState } from "@/components/empty-state"
 import { ErrorPanel } from "@/components/error-panel"
 import { LoadingState } from "@/components/loading-state"
@@ -138,13 +138,14 @@ function Card({ schema, id, limits, data, month }: {
 function Loaded({ schema }: { schema: Schema }) {
   const [state, setState] = React.useState<Loadable<Data>>({ state: "loading" })
   const { params } = useUrlState()
+  const { epoch } = useAppData()
   React.useEffect(() => {
     let live = true
     load(schema).then((r) => live && setState(r))
     return () => {
       live = false
     }
-  }, [schema])
+  }, [schema, epoch])
   const ids = Object.keys(schema.platforms)
   if (ids.length === 0) {
     return (

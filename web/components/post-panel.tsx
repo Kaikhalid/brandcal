@@ -1,12 +1,15 @@
 "use client"
 
-import { Check, Copy, TriangleAlert, X } from "lucide-react"
+import { Copy, TriangleAlert, X } from "lucide-react"
 import * as React from "react"
 import { Suspense } from "react"
+import { flushSync } from "react-dom"
 
 import { useAppData, type Loadable } from "@/components/app-data"
 import { ErrorPanel } from "@/components/error-panel"
+import { useNotice } from "@/components/notice"
 import { PlatformBadge } from "@/components/platform-swatch"
+import { Actions, type ActionsHost } from "@/components/post-actions"
 import { PostBadges, TypeTag, takeOpener, words } from "@/components/post-bits"
 import { StatusChip } from "@/components/status-chip"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -29,27 +32,34 @@ import { cn } from "@/lib/utils"
 
 type Data = { post: PostDetail; events: EventRow[]; versions: Version[] }
 
-function usePanelData(id: string): Loadable<Data> {
+async function fetchPanel(id: string): Promise<Loadable<Data>> {
+  const [post, ev, vs] = await Promise.all([getPost(id), getEvents({ post: id }), getVersions(id)])
+  const failed = [post, ev, vs].find((r) => !r.ok)
+  if (failed && !failed.ok) return { state: "error", refusal: failed.refusal }
+  if (post.ok && ev.ok && vs.ok) {
+    return { state: "ok", data: { post: post.data, events: ev.data.events, versions: vs.data.versions } }
+  }
+  return { state: "loading" }
+}
+
+function usePanelData(id: string): { state: Loadable<Data>; reload: () => Promise<Loadable<Data>> } {
   // The answer is kept with the post it belongs to; another post reads as loading.
   const [answer, setAnswer] = React.useState<{ id: string; state: Loadable<Data> } | null>(null)
   React.useEffect(() => {
     let live = true
-    Promise.all([getPost(id), getEvents({ post: id }), getVersions(id)]).then(([post, ev, vs]) => {
-      if (!live) return
-      const failed = [post, ev, vs].find((r) => !r.ok)
-      const state: Loadable<Data> =
-        failed && !failed.ok
-          ? { state: "error", refusal: failed.refusal }
-          : post.ok && ev.ok && vs.ok
-            ? { state: "ok", data: { post: post.data, events: ev.data.events, versions: vs.data.versions } }
-            : { state: "loading" }
-      setAnswer({ id, state })
-    })
+    fetchPanel(id).then((state) => live && setAnswer({ id, state }))
     return () => {
       live = false
     }
   }, [id])
-  return answer?.id === id ? answer.state : { state: "loading" }
+  // After a write: read the post again. The old answer stays on screen until the new one is in.
+  const reload = React.useCallback(async () => {
+    const state = await fetchPanel(id)
+    // Drawn before this returns, so the caller can look for the button it wants to focus.
+    flushSync(() => setAnswer({ id, state }))
+    return state
+  }, [id])
+  return { state: answer?.id === id ? answer.state : { state: "loading" }, reload }
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -359,38 +369,7 @@ function Audit({ events, zone }: { events: EventRow[]; zone: string | null }) {
   )
 }
 
-function Actions({ post }: { post: PostDetail }) {
-  const all = [...post.actions, post.note].filter((a): a is PostAction => a !== null)
-  return (
-    <Section title="Actions">
-      {all.length === 0 ? (
-        <p className="text-sm text-label">This post is closed, so there is nothing to do.</p>
-      ) : (
-        <ul className="flex flex-col gap-4">
-          {all.map((a) => (
-            <li key={a.id} data-action={a.id} data-enabled={a.enabled} className="flex flex-col gap-2 rounded-control bg-muted p-3 text-sm">
-              <span className="flex items-center gap-2 font-medium">
-                {a.enabled ? (
-                  <Check aria-hidden="true" strokeWidth={1.5} className="size-4" />
-                ) : (
-                  <X aria-hidden="true" strokeWidth={1.5} className="size-4" />
-                )}
-                {a.label}
-                <span className="font-normal text-label">{a.enabled ? "Possible now" : "Not possible now"}</span>
-              </span>
-              {a.warning && a.id === "edit" && <p className="text-label">{a.warning}</p>}
-              {a.refusal && <ErrorPanel error={a.refusal} blocking={false} className="shadow-none" />}
-              <p className="text-xs text-label">Agent equivalent (CLI)</p>
-              <code className="rounded-control bg-surface px-2 py-1.5 font-mono text-xs break-words">{a.cli}</code>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Section>
-  )
-}
-
-function Body({ data, schema }: { data: Data; schema: Schema }) {
+function Body({ data, schema, host }: { data: Data; schema: Schema; host: ActionsHost }) {
   const { post } = data
   const zone = schema.timezone
   const w = post.window ? spanOf(post.window, zone) : null
@@ -418,17 +397,88 @@ function Body({ data, schema }: { data: Data; schema: Schema }) {
       <History data={data} zone={zone} />
       <Compare versions={data.versions} />
       <Audit events={data.events} zone={zone} />
-      <Actions post={post} />
+      <Section title="Actions">
+        <Actions post={post} schema={schema} host={host} />
+      </Section>
     </div>
   )
 }
 
 function Panel({ id }: { id: string }) {
-  const { schema } = useAppData()
+  const { schema, refresh } = useAppData()
   const { set } = useUrlState()
-  const state = usePanelData(id)
+  const notify = useNotice()
+  const { state, reload } = usePanelData(id)
   const heading = React.useRef<HTMLHeadingElement>(null)
+  const root = React.useRef<HTMLElement>(null)
   const title = state.state === "ok" ? state.data.post.title : "Post"
+  const version = state.state === "ok" ? state.data.post.content_version : 0
+  const [banner, setBanner] = React.useState<string | null>(null)
+
+  // After a write the panel waits for two things before it says and focuses anything: the reload
+  // has been drawn, and the dialog has finished closing (the page behind a modal is inert, so
+  // focus cannot land earlier).
+  const latest = React.useRef({ title, version })
+  React.useEffect(() => {
+    latest.current = { title, version }
+  }, [title, version])
+  const gate = React.useRef({
+    pending: null as PostAction["id"] | null,
+    notice: null as string | null,
+    reloading: false,
+    closed: true,
+  })
+  const settle = React.useCallback(() => {
+    const g = gate.current
+    if (g.reloading || !g.closed) return
+    if (g.notice) notify(g.notice)
+    g.notice = null
+    if (g.pending) {
+      // The same action, or the panel heading when it no longer exists or is disabled.
+      const same = root.current?.querySelector<HTMLElement>(`[data-action-button="${g.pending}"]:not([disabled])`)
+      ;(same ?? heading.current)?.focus()
+    }
+    g.pending = null
+  }, [notify])
+
+  const host = React.useMemo<ActionsHost>(
+    () => ({
+      opened: () => {
+        gate.current.closed = false
+      },
+      closed: (actionId) => {
+        gate.current.closed = true
+        gate.current.pending ??= actionId
+        settle()
+      },
+      written: async (actionId, label, result) => {
+        const g = gate.current
+        g.pending = actionId
+        g.reloading = true
+        setBanner(null)
+        const fresh = await reload()
+        const post = fresh.state === "ok" ? fresh.data.post : null
+        const status = String(result.status ?? post?.status ?? "")
+        g.notice = `${label}: done. ${latest.current.title} is now ${words(status)}, version ${result.version ?? post?.content_version}.`
+        g.reloading = false
+        refresh()
+        settle()
+      },
+      stale: async (actionId, current) => {
+        const g = gate.current
+        g.pending = actionId
+        g.reloading = true
+        setBanner(
+          `This post changed (version ${latest.current.version} to ${current?.content_version ?? "a newer version"}). Read it again before deciding. Nothing was recorded.`
+        )
+        await reload()
+        g.reloading = false
+        refresh()
+        settle()
+      },
+    }),
+    [reload, refresh, settle]
+  )
 
   // Focus moves into the panel when it opens or switches post.
   React.useEffect(() => {
@@ -451,7 +501,9 @@ function Panel({ id }: { id: string }) {
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented) close()
+      // Esc inside a confirm dialog closes only the dialog, never the panel behind it.
+      const inDialog = e.target instanceof Element && e.target.closest('[role="dialog"], [role="alertdialog"]')
+      if (e.key === "Escape" && !e.defaultPrevented && !inDialog) close()
     }
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
@@ -459,10 +511,12 @@ function Panel({ id }: { id: string }) {
 
   return (
     <aside
+      ref={root}
       aria-labelledby="panel-title"
       data-post-panel={id}
       className={cn(
-        "glass fixed top-(--shell-top) right-0 bottom-0 z-40 w-[min(34rem,100vw)] overflow-y-auto overscroll-contain",
+        // scroll-pb keeps a focused control clear of the notice card at the bottom right (WCAG 2.4.11).
+        "glass scroll-pb-32 fixed top-(--shell-top) right-0 bottom-0 z-40 w-[min(34rem,100vw)] overflow-y-auto overscroll-contain",
         "min-[1200px]:sticky min-[1200px]:z-10 min-[1200px]:h-[calc(100svh-var(--shell-top))] min-[1200px]:w-[30rem] min-[1200px]:shrink-0 min-[1200px]:self-start"
       )}
     >
@@ -485,6 +539,16 @@ function Panel({ id }: { id: string }) {
             <X aria-hidden="true" strokeWidth={1.5} className="size-5" />
           </button>
         </div>
+        {banner && (
+          <div
+            role="alert"
+            data-stale-banner
+            className="sticky top-4 z-10 flex gap-3 rounded-inner bg-st-awaiting p-4 text-sm text-st-awaiting-ink shadow-float"
+          >
+            <TriangleAlert aria-hidden="true" strokeWidth={1.5} className="mt-0.5 size-5 shrink-0" />
+            <p>{banner}</p>
+          </div>
+        )}
         {state.state === "loading" || schema.state !== "ok" ? (
           <div role="status" aria-busy="true" aria-label="Loading the post" className="flex flex-col gap-4">
             <Skeleton className="h-6 w-2/3" />
@@ -494,7 +558,7 @@ function Panel({ id }: { id: string }) {
         ) : state.state === "error" ? (
           <ErrorPanel error={state.refusal} />
         ) : (
-          <Body data={state.data} schema={schema.data} />
+          <Body data={state.data} schema={schema.data} host={host} />
         )}
       </div>
     </aside>
@@ -517,7 +581,8 @@ function Host() {
     }
   }, [id, beside])
 
-  return id ? <Panel id={id} /> : null
+  // Keyed by post: another post starts with a clean banner and no pending focus.
+  return id ? <Panel key={id} id={id} /> : null
 }
 
 /** The side panel of the open post (`?post=ID`), shown from any view. */

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 
-import type { Loadable } from "@/components/app-data"
+import { useAppData, type Loadable } from "@/components/app-data"
 import { getPost, getPosts } from "@/lib/api"
 import type { PostItem } from "@/lib/url-state"
 
@@ -12,6 +12,7 @@ import type { PostItem } from "@/lib/url-state"
 export function usePostItems(from?: string, to?: string): Loadable<PostItem[]> {
   // The answer is kept with the range it belongs to; another range reads as loading.
   const key = `${from ?? ""}/${to ?? ""}`
+  const { epoch } = useAppData()
   const [answer, setAnswer] = React.useState<{ key: string; state: Loadable<PostItem[]> } | null>(null)
 
   React.useEffect(() => {
@@ -31,7 +32,8 @@ export function usePostItems(from?: string, to?: string): Loadable<PostItem[]> {
     return () => {
       live = false
     }
-  }, [from, to, key])
+    // A write bumps epoch: read again, and keep showing the old answer until the new one is in.
+  }, [from, to, key, epoch])
 
   return answer?.key === key ? answer.state : { state: "loading" }
 }

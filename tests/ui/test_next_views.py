@@ -255,9 +255,9 @@ def test_the_panel_diffs_two_versions_with_signs_and_shows_media(
             pid,
         )
         assert len(wanted) >= 3
-        for action, cli in wanted:  # each action, with its exact CLI line, read-only
+        for action, cli in wanted:  # each action: a button (N3) and its exact CLI line
             assert page.locator(f'aside [data-action="{action}"] code').inner_text() == cli
-        assert page.locator("aside button", has_text="Approve").count() == 0  # no write buttons yet
+            assert page.locator(f'aside [data-action-button="{action}"]').count() == 1
     finally:
         page.context.close()
 
