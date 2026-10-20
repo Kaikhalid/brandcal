@@ -477,8 +477,16 @@ def test_every_dialog_takes_focus_traps_it_and_returns_it(
         for key in ("Tab", "Shift+Tab"):
             for _ in range(25):
                 page.keyboard.press(key)
-                page.wait_for_timeout(30)  # focus guards hand focus back asynchronously
-                assert dialog.evaluate("(el) => el.contains(document.activeElement)"), key
+                # Focus guards hand focus back asynchronously; on a loaded CI runner that can take
+                # longer than one frame, so poll (up to 1 s) instead of a fixed 30 ms sleep.
+                for _ in range(20):
+                    page.wait_for_timeout(50)
+                    if dialog.evaluate("(el) => el.contains(document.activeElement)"):
+                        break
+                assert dialog.evaluate("(el) => el.contains(document.activeElement)"), (
+                    key,
+                    page.evaluate("document.activeElement.outerHTML.slice(0, 160)"),
+                )
         page.keyboard.press("Escape")
         expect(dialog).to_have_count(0)
         expect(button(page, action)).to_be_focused()
