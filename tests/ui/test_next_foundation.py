@@ -404,8 +404,8 @@ def test_opening_the_panel_at_1440_switches_to_day_bands_with_no_sideways_scroll
 ) -> None:
     page = week(browser, site)
     try:
-        columns = page.locator("[aria-label='Week calendar'] .hour-grid")
-        assert columns.count() >= 7, "columns expected"
+        columns = page.locator("[aria-label='Week calendar'] [data-week-stacks] section[data-day]")
+        assert columns.count() == 7, "columns expected"
         pid = page.evaluate(
             "async () => (await (await fetch('/api/posts?closed=1')).json()).posts.find((p) => p.title === 'Spring launch thread').id"
         )
@@ -421,7 +421,7 @@ def test_opening_the_panel_at_1440_switches_to_day_bands_with_no_sideways_scroll
         page.get_by_role("button", name="Close panel").click()
         page.locator(PANEL).wait_for(state="detached")
         page.wait_for_timeout(300)
-        assert page.locator("[aria-label='Week calendar'] .hour-grid").count() >= 7
+        assert columns.count() == 7
     finally:
         page.context.close()
 

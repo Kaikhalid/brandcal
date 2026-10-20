@@ -170,6 +170,14 @@ and never let two hit areas overlap.
   the width of the content column (a container query at 1100 px).
 - **Gutters** 24 px (16 below 640), gaps 8 and 16. Gaps between wells are 8 px and a soft shadow,
   not borders.
+- **Week stacks, no hour axis.** The week is seven `rounded-inner` wells inside the calendar card
+  (8 px padding, 6 px when the calendar box is under 60 rem). Each well has a 48 px sticky header
+  (weekday, date numeral, the black circle and the word "Today" for today, tinted `--muted`) and its
+  posts as cards in time order: row 1 time and platform name, row 2 title (two lines, three in a
+  very narrow well), row 3 the status chip. A thin ink "now" rule sits in today's stack at the
+  right place; an empty day says "Nothing planned". The month uses the same wells and cards in rows
+  that size to their content (at least 96 px). Day bands (a box under 880 px) flow their cards in
+  as many columns of at least 16 rem as fit.
 
 ## 7. Motion
 

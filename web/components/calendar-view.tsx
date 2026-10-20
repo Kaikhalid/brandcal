@@ -20,6 +20,7 @@ import {
   DAYS,
   addDays,
   clock,
+  dateKey,
   dayLabel,
   dowOf,
   isDateKey,
@@ -29,6 +30,7 @@ import {
   rangeFor,
   spanOf,
   todayKey,
+  windowLabel,
   zoneOffset,
   type Span,
   type View,
@@ -43,43 +45,8 @@ import {
 import { cn } from "@/lib/utils"
 
 const COLUMNS_MIN = 880 // px of calendar box: from here seven day columns, below it day bands
-const HOUR_REM = 9 // the height of an hour row; keep in step with --hour in globals.css
-const MIN_BLOCK = 60 // minutes: a shorter window is drawn this tall so its text stays readable
 
 type Entry = { item: PostItem; span: Span }
-type Placed = Entry & { lane: number; lanes: number }
-
-/** Posts that overlap in time share the day column side by side, one lane each. */
-function place(entries: Entry[]): Placed[] {
-  const sorted = [...entries].sort(
-    (a, b) => a.span.startMin - b.span.startMin || a.span.endMin - b.span.endMin
-  )
-  const out: Placed[] = []
-  let cluster: Placed[] = []
-  let laneEnds: number[] = []
-  let clusterEnd = 0
-  const flush = () => {
-    for (const p of cluster) p.lanes = laneEnds.length
-    out.push(...cluster)
-    cluster = []
-    laneEnds = []
-  }
-  for (const e of sorted) {
-    if (cluster.length && e.span.startMin >= clusterEnd) flush()
-    const end = Math.max(e.span.endMin, e.span.startMin + MIN_BLOCK)
-    let lane = laneEnds.findIndex((x) => x <= e.span.startMin)
-    if (lane < 0) {
-      lane = laneEnds.length
-      laneEnds.push(end)
-    } else {
-      laneEnds[lane] = end
-    }
-    cluster.push({ ...e, lane, lanes: 0 })
-    clusterEnd = Math.max(clusterEnd, end)
-  }
-  flush()
-  return out
-}
 
 /** The time now in the configured zone, refreshed each minute (a clock, not a poll of the API). */
 function useNow(zone: string | null) {
@@ -95,57 +62,53 @@ function useNow(zone: string | null) {
 
 type Common = { entry: Entry; open: ReturnType<typeof useOpenPost>; current: boolean }
 
-/** A post as a soft pastel block in the week grid. */
-function Block({
-  entry: { item, span },
-  lane,
-  lanes,
-  open,
-  current,
-}: Common & { lane: number; lanes: number }) {
+/** The tooltip of a post: its title and the whole window with the zone offset ("+03:00"). */
+function windowTip(title: string, window: string | null, zone: string | null) {
+  if (!window) return title
+  const offset = zoneOffset(zone, new Date(window.split("/")[0]))
+  return `${title}\n${windowLabel(window, zone)}${offset ? ` (${offset})` : ""}`
+}
+
+/** A post in a day stack or a month cell: time and platform, the title (two lines), the status. */
+function StackCard({ entry: { item, span }, open, current, zone }: Common & { zone: string | null }) {
   const { row, detail } = item
-  const end = Math.max(span.endMin, span.startMin + MIN_BLOCK)
   return (
     <button
       type="button"
       data-post-id={row.id}
-      data-start={span.from}
       data-day={span.day}
+      data-start={span.from}
       aria-current={current ? "true" : undefined}
-      title={row.window ?? undefined}
+      title={windowTip(row.title, row.window, zone)}
       onClick={(e) => open(row.id, e.currentTarget)}
-      style={{
-        top: `calc(var(--hour) * ${span.startMin / 60})`,
-        // A minimum, not a fixed height: wider text spacing grows the block instead of clipping it.
-        minHeight: `calc(var(--hour) * ${(end - span.startMin) / 60} - 4px)`,
-        left: `calc(${(lane / lanes) * 100}% + 2px)`,
-        width: `calc(${100 / lanes}% - 4px)`,
-      }}
       className={cn(
-        "press absolute flex flex-col items-start gap-1 rounded-control p-2.5 text-left shadow-card hover:z-[6] focus-visible:z-[6]",
+        "press flex w-full min-w-0 flex-col items-start gap-1.5 rounded-control p-2.5 text-left shadow-card @max-[8rem]:p-2",
         "hover:brightness-[0.97] aria-[current=true]:outline-2 aria-[current=true]:outline-ink",
         platformBlock(row.platform)
       )}
     >
-      <span className="text-sm leading-snug font-medium break-words">{row.title}</span>
-      <span className="text-[0.8125rem] tabular-nums" title={row.window ?? undefined}>
-        {span.text}
-      </span>
-      <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-        <PlatformMark platform={row.platform} />
-        <span className="inline-flex items-center gap-1 text-[0.8125rem]">
-          <TypeIcon type={detail.post_type} className="size-3.5" />
-          {detail.post_type}
+      <span className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[0.8125rem] leading-snug">
+        <span data-card-time className="font-medium tabular-nums">
+          {span.from}
         </span>
+        <PlatformMark platform={row.platform} bare />
+        <TypeIcon type={detail.post_type} className="ml-auto size-3.5 @max-[10rem]:hidden" />
+        <span className="sr-only">{detail.post_type}</span>
       </span>
-      <StatusChip status={row.status} className="min-h-6 gap-1 px-2 text-[0.8125rem]" />
-      <PostBadges post={detail} />
+      <span
+        data-card-title
+        className="line-clamp-2 min-w-0 text-sm leading-snug font-medium hyphens-auto wrap-anywhere @max-[8rem]:line-clamp-3"
+      >
+        {row.title}
+      </span>
+      <StatusChip status={row.status} className="min-h-7 gap-1 pr-2.5 pl-2 text-[0.8125rem]" />
+      <PostBadges post={detail} compact />
     </button>
   )
 }
 
-/** A post as a card: the day list on a small screen, and the expanded "+N more" of the month. */
-function Card({ entry: { item, span }, open, current, compact }: Common & { compact?: boolean }) {
+/** A post as a full-width card in the day bands (the phone and any calendar box under 880 px). */
+function Card({ entry: { item, span }, open, current }: Common) {
   const { row, detail } = item
   return (
     <button
@@ -157,34 +120,21 @@ function Card({ entry: { item, span }, open, current, compact }: Common & { comp
       title={row.window ?? undefined}
       onClick={(e) => open(row.id, e.currentTarget)}
       className={cn(
-        "press flex w-full flex-col items-start gap-1.5 rounded-control text-left shadow-card",
+        "press flex w-full flex-col items-start gap-1.5 rounded-control p-4 text-left shadow-card",
         "hover:brightness-[0.97] aria-[current=true]:outline-2 aria-[current=true]:outline-ink",
-        compact ? "p-2" : "p-4",
         platformBlock(row.platform)
       )}
     >
       <span className="flex w-full min-w-0 items-baseline gap-2">
         <span className="shrink-0 text-[0.8125rem] tabular-nums">{span.from}</span>
-        <span className={cn("min-w-0 font-medium", compact ? "truncate text-sm" : "text-base")}>
-          {row.title}
-        </span>
+        <span className="min-w-0 text-base font-medium">{row.title}</span>
       </span>
-      {!compact && (
-        <span className="text-[0.8125rem] tabular-nums">
-          {span.text} · {detail.post_type}
-        </span>
-      )}
-      <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-        <PlatformMark platform={row.platform} />
-        {compact && (
-          <>
-            <TypeIcon type={detail.post_type} className="size-3.5" />
-            <span className="sr-only">{detail.post_type}</span>
-          </>
-        )}
+      <span className="text-[0.8125rem] tabular-nums">
+        {span.text} · {detail.post_type}
       </span>
+      <PlatformMark platform={row.platform} />
       <StatusChip status={row.status} className="min-h-6 gap-1 px-2 text-[0.8125rem]" />
-      {!compact && <PostBadges post={detail} />}
+      <PostBadges post={detail} />
     </button>
   )
 }
@@ -206,7 +156,27 @@ function DayNumber({ day, today, light }: { day: string; today: boolean; light?:
   )
 }
 
-function WeekGrid({
+/** The well of a day: tinted for today, a quiet canvas well for the others. */
+const wellTone = (today: boolean) => (today ? "bg-muted" : "bg-canvas")
+
+/** The thin "now" rule inside today's stack, between the posts before and after this minute. */
+function NowRule({ now }: { now: NonNullable<ReturnType<typeof useNow>> }) {
+  return (
+    <>
+      <span className="sr-only">Now: {clock(now)}</span>
+      <div
+        aria-hidden="true"
+        data-now={clock(now)}
+        className="pointer-events-none relative h-0.5 shrink-0 rounded-full bg-ink"
+      >
+        <span className="absolute -top-[3px] -left-1 size-2 rounded-full bg-ink" />
+      </div>
+    </>
+  )
+}
+
+/** The week as seven time-ordered stacks: no hour axis, each post a card in its day's well. */
+function WeekStacks({
   days,
   byDay,
   today,
@@ -223,97 +193,93 @@ function WeekGrid({
   open: ReturnType<typeof useOpenPost>
   post: string | null
 }) {
-  const scroller = React.useRef<HTMLDivElement>(null)
-  const first = days.flatMap((d) => byDay.get(d) ?? []).map((e) => e.span.startMin)
-  const firstHour = first.length ? Math.floor(Math.min(...first) / 60) : 8
-  React.useEffect(() => {
-    const box = scroller.current
-    if (!box) return
-    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
-    box.scrollTop = Math.max(0, firstHour * HOUR_REM * rem - 8)
-  }, [firstHour, days])
-
-  const template = "grid-cols-[3.5rem_repeat(7,minmax(0,1fr))]"
   const nowMin = now ? now.h * 60 + now.mi : 0
-  const nowDay = now ? `${now.y}-${String(now.mo).padStart(2, "0")}-${String(now.d).padStart(2, "0")}` : ""
+  const nowDay = now ? dateKey(now) : ""
   return (
     <div
-      ref={scroller}
       role="region"
       aria-label="Week calendar"
       tabIndex={0}
-      className="card-surface relative h-full scroll-pb-32 overflow-y-auto"
+      className="card-surface @container relative flex h-full scroll-pb-32 flex-col overflow-y-auto"
     >
-      <div>
-        <div className={cn("sticky top-0 z-10 grid border-b border-hairline bg-surface", template)}>
-          <div />
-          {days.map((day) => (
-            <div
-              key={day}
-              aria-current={day === today ? "date" : undefined}
-              className="flex items-center gap-2 border-l border-hairline px-3 py-3"
-            >
-              <span className="w-9 text-sm text-label">{DAYS[dowOf(day)]}</span>
-              <DayNumber day={day} today={day === today} />
-            </div>
-          ))}
-        </div>
-        <div className={cn("grid", template)}>
-          <div className="hour-grid relative" aria-hidden="true">
-            {Array.from({ length: 24 }, (_, h) => (
-              <span
-                key={h}
-                className="absolute right-2 -translate-y-1/2 text-[0.8125rem] text-label tabular-nums"
-                style={{ top: `calc(var(--hour) * ${h})`, display: h === 0 ? "none" : undefined }}
-              >
-                {String(h).padStart(2, "0")}:00
+      {/* One grid: the header cells (row 1) stick to the top while the stacks (row 2) scroll.
+          Under 60 rem of calendar the gaps and well padding tighten by 2 px so a card keeps its width. */}
+      <div
+        data-week-stacks
+        className="grid min-h-full flex-1 grid-cols-7 grid-rows-[auto_1fr] gap-x-2 px-2 pt-1.5 pb-2 @max-[60rem]:gap-x-1.5 @max-[60rem]:px-1.5"
+      >
+        {days.map((day) => (
+          <div
+            key={`head-${day}`}
+            data-day-header={day}
+            aria-hidden="true"
+            className={cn("@container sticky top-0 z-10 rounded-t-inner", wellTone(day === today))}
+          >
+            <div className="flex h-12 items-center gap-2 px-3">
+              <span data-weekday className="w-8 text-sm text-label">
+                {DAYS[dowOf(day)]}
               </span>
-            ))}
+              <span
+                className={cn(
+                  "inline-flex size-8 shrink-0 items-center justify-center rounded-full text-lg tabular-nums",
+                  day === today && "bg-pill text-pill-foreground"
+                )}
+              >
+                {parseDate(day)[2]}
+              </span>
+              {day === today && <span className="text-sm @max-[8.75rem]:hidden">Today</span>}
+            </div>
           </div>
-          {days.map((day) => (
+        ))}
+        {days.map((day) => {
+          const mine = byDay.get(day) ?? []
+          const isToday = day === today
+          // Today's rule goes before the first post that starts after this minute (or at the end).
+          const next = mine.findIndex((e) => e.span.startMin > nowMin)
+          const rule = now && day === nowDay ? (next === -1 ? mine.length : next) : -1
+          return (
             <section
               key={day}
               aria-label={dayLabel(day)}
+              aria-current={isToday ? "date" : undefined}
               data-day={day}
-              className="hour-grid relative border-l border-hairline"
+              className={cn(
+                "@container flex min-w-0 flex-col gap-2 rounded-b-inner px-2 pb-2 @max-[60rem]:px-1.5",
+                wellTone(isToday)
+              )}
             >
-              {place(byDay.get(day) ?? []).map((p) => (
-                <Block
-                  key={p.item.row.id}
-                  entry={p}
-                  lane={p.lane}
-                  lanes={p.lanes}
-                  open={open}
-                  current={post === p.item.row.id}
-                />
+              {mine.map((entry, i) => (
+                <React.Fragment key={entry.item.row.id}>
+                  {now && rule === i && <NowRule now={now} />}
+                  <StackCard
+                    entry={entry}
+                    open={open}
+                    current={post === entry.item.row.id}
+                    zone={zone}
+                  />
+                </React.Fragment>
               ))}
-              {now && day === nowDay && (
-                <>
-                  <span className="sr-only">Now: {clock(now)}</span>
-                  <div
-                    aria-hidden="true"
-                    data-now={clock(now)}
-                    className="pointer-events-none absolute inset-x-0 z-[5] h-px bg-ink"
-                    style={{ top: `calc(var(--hour) * ${nowMin / 60})` }}
-                  >
-                    <span className="absolute -top-1 -left-1 size-2 rounded-full bg-ink" />
-                  </div>
-                </>
+              {now && rule === mine.length && <NowRule now={now} />}
+              {mine.length === 0 && (
+                <p className="px-1 py-2 text-[0.8125rem] text-label">Nothing planned</p>
               )}
             </section>
-          ))}
-        </div>
+          )
+        })}
       </div>
       <span className="sr-only">Times are shown in {zone ?? "the time each post carries"}.</span>
     </div>
   )
 }
 
+/** The month: the same wells and cards as the week, a row per week sized to what it holds
+ *  (at least 96 px), so an empty week is a quiet line and a busy one grows. */
 function MonthGrid({
   days,
   month,
   byDay,
   today,
+  zone,
   open,
   post,
 }: {
@@ -321,6 +287,7 @@ function MonthGrid({
   month: number
   byDay: Map<string, Entry[]>
   today: string
+  zone: string | null
   open: ReturnType<typeof useOpenPost>
   post: string | null
 }) {
@@ -330,21 +297,21 @@ function MonthGrid({
       role="region"
       aria-label="Month calendar"
       tabIndex={0}
-      className="card-surface relative h-full scroll-pb-32 overflow-y-auto"
+      className="card-surface relative h-full scroll-pb-32 overflow-y-auto px-2 pb-2"
     >
-      <div>
-      <div className="sticky top-0 z-10 grid grid-cols-7 border-b border-hairline bg-surface">
+      <div className="sticky top-0 z-10 grid grid-cols-7 gap-x-2 bg-surface pt-1.5">
         {[...DAYS.slice(1), DAYS[0]].map((d) => (
           <div key={d} className="px-3 py-2 text-sm text-label">
             {d}
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-7">
+      <div className="grid grid-cols-7 gap-2">
         {days.map((day) => {
           const mine = byDay.get(day) ?? []
           const all = expanded.has(day)
           const shown = all ? mine : mine.slice(0, 3)
+          const outside = parseDate(day)[1] !== month
           return (
             <div
               key={day}
@@ -353,18 +320,18 @@ function MonthGrid({
               aria-current={day === today ? "date" : undefined}
               data-day={day}
               className={cn(
-                "flex min-h-32 min-w-0 flex-col gap-1.5 border-t border-l border-hairline p-2 first:border-l-0 nth-[7n+1]:border-l-0",
-                parseDate(day)[1] !== month && "bg-canvas"
+                "@container flex min-h-24 min-w-0 flex-col gap-2 rounded-inner p-2",
+                outside ? "inset-ring inset-ring-hairline" : wellTone(day === today)
               )}
             >
-              <DayNumber day={day} today={day === today} light={parseDate(day)[1] !== month} />
+              <DayNumber day={day} today={day === today} light={outside} />
               {shown.map((entry) => (
-                <Card
+                <StackCard
                   key={entry.item.row.id}
                   entry={entry}
                   open={open}
                   current={post === entry.item.row.id}
-                  compact
+                  zone={zone}
                 />
               ))}
               {mine.length > 3 && (
@@ -385,7 +352,6 @@ function MonthGrid({
             </div>
           )
         })}
-      </div>
       </div>
     </div>
   )
@@ -430,14 +396,18 @@ function DayList({
                 <DayNumber day={day} today={day === today} />
               </h3>
               {mine.length ? (
-                mine.map((entry) => (
-                  <Card
-                    key={entry.item.row.id}
-                    entry={entry}
-                    open={open}
-                    current={post === entry.item.row.id}
-                  />
-                ))
+                // Cards flow in as many columns as the box allows: one on a phone, two or three
+                // when a wide box (the sidebar open, the panel open) is still under 880 px.
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
+                  {mine.map((entry) => (
+                    <Card
+                      key={entry.item.row.id}
+                      entry={entry}
+                      open={open}
+                      current={post === entry.item.row.id}
+                    />
+                  ))}
+                </div>
               ) : (
                 <p className="text-sm text-label">Nothing planned.</p>
               )}
@@ -566,7 +536,7 @@ function CalendarBody({ schema }: { schema: Schema }) {
               label={label}
             />
           ) : view === "week" ? (
-            <WeekGrid
+            <WeekStacks
               days={days}
               byDay={byDay}
               today={today}
@@ -581,6 +551,7 @@ function CalendarBody({ schema }: { schema: Schema }) {
               month={month}
               byDay={byDay}
               today={today}
+              zone={zone}
               open={open}
               post={post}
             />

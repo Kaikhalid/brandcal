@@ -117,17 +117,26 @@ def test_panel_loads_clean_in_both_themes(browser: Any, site: tuple[str, str], s
         page.context.close()
 
 
-def test_the_week_places_a_post_on_its_day_and_hour(browser: Any, site: tuple[str, str]) -> None:
+def test_the_week_places_a_post_in_its_days_stack_in_time_order(
+    browser: Any, site: tuple[str, str]
+) -> None:
     page, _ = load(browser, site, "calendar-week", "light")
     try:
         pid = post_id(page, "Planning day at Example Co")  # Tuesday, 10:00 to 11:00
-        block = page.locator(f'button[data-post-id="{pid}"]')
-        assert block.get_attribute("data-day") == TUESDAY
-        assert block.get_attribute("data-start") == "10:00"
-        column = page.locator(f'section[data-day="{TUESDAY}"]')
-        offset = block.bounding_box()["y"] - column.bounding_box()["y"]  # type: ignore[index]
-        assert abs(offset - 10 * 144) <= 3, offset  # 9rem per hour
-        assert "10:00 to 11:00" in block.inner_text()
+        card = page.locator(f'button[data-post-id="{pid}"]')
+        assert card.get_attribute("data-day") == TUESDAY
+        assert card.get_attribute("data-start") == "10:00"
+        stack = page.locator(f'section[data-day="{TUESDAY}"]')
+        assert stack.locator(f'button[data-post-id="{pid}"]').count() == 1
+        # No hour axis: the card sits at the top of its stack, ordered by start time.
+        starts = stack.locator("button[data-post-id]").evaluate_all(
+            "els => els.map(e => [e.dataset.start, e.getBoundingClientRect().top])"
+        )
+        assert [s for s, _ in starts] == sorted(s for s, _ in starts), starts
+        assert [y for _, y in starts] == sorted(y for _, y in starts), starts
+        assert "10:00" in card.inner_text()
+        # The tooltip carries the whole window with the zone offset (S10).
+        assert re.search(r"10:00 to 11:00 \([+-]\d\d:\d\d\)", card.get_attribute("title") or "")
         heading = page.get_by_role("heading", level=1).inner_text()
         assert "9 – 15 March 2026" in heading
     finally:
@@ -368,8 +377,8 @@ def test_the_views_fit_small_screens(
         assert not problems, problems
         if view.startswith("calendar") and size is PHONE:
             assert page.locator("h3[aria-current=date], section[data-day] h3").count() >= 1
-            # Day bands, not columns: the region holds sections, never an hour grid.
-            assert page.locator("[aria-label='Week calendar'] .hour-grid").count() == 0
+            # Day bands, not columns: the region holds sections, never the seven stacks.
+            assert page.locator("[aria-label='Week calendar'] [data-week-stacks]").count() == 0
         # No page-wide sideways scroll; only the grid or table scrolls itself.
         offenders = page.evaluate(
             "[...document.querySelectorAll('body *')].filter(e => !e.closest('[role=region]')"

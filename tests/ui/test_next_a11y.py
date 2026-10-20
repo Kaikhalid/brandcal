@@ -644,12 +644,16 @@ def test_the_now_line_sits_on_the_right_day_and_hour_and_is_hidden_from_assistiv
         assert page.locator("[data-now]").count() == 1
         label = day.locator(".sr-only", has_text="Now: 10:30")  # visually hidden, still read
         expect(label).to_have_count(1)
-        hour = page.evaluate(
-            "(() => { const l = document.querySelector('[data-now]');"
-            " const d = l.closest('section'); const px = d.getBoundingClientRect().height / 24;"
-            " return (l.getBoundingClientRect().top - d.getBoundingClientRect().top) / px; })()"
+        # The rule sits inside the stack, after every card that starts before 10:30 and before
+        # every card that starts after it.
+        order = page.evaluate(
+            "(() => { const l = document.querySelector('[data-now]'); const y = l.getBoundingClientRect().top;"
+            " return [...l.closest('section').querySelectorAll('button[data-post-id]')]"
+            ".map((b) => [b.dataset.start, b.getBoundingClientRect().top < y]); })()"
         )
-        assert abs(hour - 10.5) < 0.05, hour
+        assert order, "no cards on the day with the rule"
+        for start, above in order:
+            assert above == (start <= "10:30"), order
     finally:
         page.context.close()
 
