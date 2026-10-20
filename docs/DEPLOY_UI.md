@@ -112,7 +112,8 @@ approver sees Approve on posts that are waiting. An email that passed Access but
 
 | Symptom | Likely cause |
 |---|---|
-| Every request `IDENTITY_UNVERIFIED`, "signing keys could not be loaded" | `team_domain` wrong (has `https://` or a slash), or the server cannot reach it |
+| `serve` exits with `BAD_ARGS` "serve.identity.team_domain must be a bare host name" | `team_domain` has `https://`, `http://` or a slash; set the host alone, e.g. `myteam.cloudflareaccess.com` |
+| Every request `IDENTITY_UNVERIFIED`, "signing keys could not be loaded" | `team_domain` is the wrong host, or the server cannot reach it |
 | "The token is for a different application" | `audience` is not this application's AUD tag |
 | "The token was issued by a different team" | `team_domain` is another team's |
 | Writes get `BAD_ORIGIN` | `https://brandcal.example.com` missing from `serve.allowed_origins` |
