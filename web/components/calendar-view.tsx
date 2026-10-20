@@ -1,18 +1,20 @@
 "use client"
 
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
+import { CalendarDays } from "lucide-react"
 import * as React from "react"
 
+import { useAppData } from "@/components/app-data"
+import { CalendarToolbar } from "@/components/calendar-toolbar"
 import { EmptyState } from "@/components/empty-state"
 import { ErrorPanel } from "@/components/error-panel"
-import { FiltersBar, pillClass } from "@/components/filters-bar"
+import { FilterStrip } from "@/components/filters-popover"
 import { PlatformMark, platformBlock } from "@/components/platform-swatch"
-import { PostBadges, TypeIcon, useOpenPost } from "@/components/post-bits"
-import { StatusChip } from "@/components/status-chip"
+import { PostBadges, TypeIcon, settleFocus, useOpenPost } from "@/components/post-bits"
+import { StatusChip, statusLabel } from "@/components/status-chip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { usePostItems } from "@/components/use-post-items"
-import { useMedia } from "@/components/use-media"
-import { Figure, ViewGate } from "@/components/view-gate"
+import { useElementWidth } from "@/components/use-element-width"
+import { ViewGate } from "@/components/view-gate"
 import type { Schema } from "@/lib/api"
 import {
   DAYS,
@@ -25,9 +27,9 @@ import {
   monthStart,
   parseDate,
   rangeFor,
-  rangeLabel,
   spanOf,
   todayKey,
+  zoneOffset,
   type Span,
   type View,
 } from "@/lib/time"
@@ -40,6 +42,7 @@ import {
 } from "@/lib/url-state"
 import { cn } from "@/lib/utils"
 
+const COLUMNS_MIN = 880 // px of calendar box: from here seven day columns, below it day bands
 const HOUR_REM = 9 // the height of an hour row; keep in step with --hour in globals.css
 const MIN_BLOCK = 60 // minutes: a shorter window is drawn this tall so its text stays readable
 
@@ -125,17 +128,17 @@ function Block({
       )}
     >
       <span className="text-sm leading-snug font-medium break-words">{row.title}</span>
-      <span className="text-xs tabular-nums" title={row.window ?? undefined}>
+      <span className="text-[0.8125rem] tabular-nums" title={row.window ?? undefined}>
         {span.text}
       </span>
       <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
         <PlatformMark platform={row.platform} />
-        <span className="inline-flex items-center gap-1 text-xs">
+        <span className="inline-flex items-center gap-1 text-[0.8125rem]">
           <TypeIcon type={detail.post_type} className="size-3.5" />
           {detail.post_type}
         </span>
       </span>
-      <StatusChip status={row.status} className="min-h-6 gap-1 px-2 text-xs" />
+      <StatusChip status={row.status} className="min-h-6 gap-1 px-2 text-[0.8125rem]" />
       <PostBadges post={detail} />
     </button>
   )
@@ -161,13 +164,13 @@ function Card({ entry: { item, span }, open, current, compact }: Common & { comp
       )}
     >
       <span className="flex w-full min-w-0 items-baseline gap-2">
-        <span className="shrink-0 text-xs tabular-nums">{span.from}</span>
+        <span className="shrink-0 text-[0.8125rem] tabular-nums">{span.from}</span>
         <span className={cn("min-w-0 font-medium", compact ? "truncate text-sm" : "text-base")}>
           {row.title}
         </span>
       </span>
       {!compact && (
-        <span className="text-xs tabular-nums">
+        <span className="text-[0.8125rem] tabular-nums">
           {span.text} · {detail.post_type}
         </span>
       )}
@@ -180,7 +183,7 @@ function Card({ entry: { item, span }, open, current, compact }: Common & { comp
           </>
         )}
       </span>
-      <StatusChip status={row.status} className="min-h-6 gap-1 px-2 text-xs" />
+      <StatusChip status={row.status} className="min-h-6 gap-1 px-2 text-[0.8125rem]" />
       {!compact && <PostBadges post={detail} />}
     </button>
   )
@@ -230,7 +233,7 @@ function WeekGrid({
     box.scrollTop = Math.max(0, firstHour * HOUR_REM * rem - 8)
   }, [firstHour, days])
 
-  const template = "grid-cols-[3.5rem_repeat(7,minmax(9rem,1fr))]"
+  const template = "grid-cols-[3.5rem_repeat(7,minmax(0,1fr))]"
   const nowMin = now ? now.h * 60 + now.mi : 0
   const nowDay = now ? `${now.y}-${String(now.mo).padStart(2, "0")}-${String(now.d).padStart(2, "0")}` : ""
   return (
@@ -239,9 +242,9 @@ function WeekGrid({
       role="region"
       aria-label="Week calendar"
       tabIndex={0}
-      className="card-surface relative max-h-[42rem] overflow-auto"
+      className="card-surface relative h-full scroll-pb-32 overflow-y-auto"
     >
-      <div className="min-w-[66rem]">
+      <div>
         <div className={cn("sticky top-0 z-10 grid border-b border-hairline bg-surface", template)}>
           <div />
           {days.map((day) => (
@@ -260,7 +263,7 @@ function WeekGrid({
             {Array.from({ length: 24 }, (_, h) => (
               <span
                 key={h}
-                className="absolute right-2 -translate-y-1/2 text-xs text-label tabular-nums"
+                className="absolute right-2 -translate-y-1/2 text-[0.8125rem] text-label tabular-nums"
                 style={{ top: `calc(var(--hour) * ${h})`, display: h === 0 ? "none" : undefined }}
               >
                 {String(h).padStart(2, "0")}:00
@@ -327,10 +330,10 @@ function MonthGrid({
       role="region"
       aria-label="Month calendar"
       tabIndex={0}
-      className="card-surface relative overflow-x-auto"
+      className="card-surface relative h-full scroll-pb-32 overflow-y-auto"
     >
-      <div className="min-w-[70rem]">
-      <div className="grid grid-cols-7 border-b border-hairline">
+      <div>
+      <div className="sticky top-0 z-10 grid grid-cols-7 border-b border-hairline bg-surface">
         {[...DAYS.slice(1), DAYS[0]].map((d) => (
           <div key={d} className="px-3 py-2 text-sm text-label">
             {d}
@@ -396,6 +399,7 @@ function DayList({
   open,
   post,
   quietDays,
+  label,
 }: {
   days: string[]
   byDay: Map<string, Entry[]>
@@ -403,9 +407,15 @@ function DayList({
   open: ReturnType<typeof useOpenPost>
   post: string | null
   quietDays: boolean
+  label: string
 }) {
   return (
-    <div className="flex flex-col gap-6">
+    <div
+      role="region"
+      aria-label={label}
+      tabIndex={0}
+      className="flex h-full scroll-pb-32 flex-col gap-6 overflow-y-auto"
+    >
       {days
         .filter((d) => quietDays || (byDay.get(d) ?? []).length)
         .map((day) => {
@@ -414,7 +424,7 @@ function DayList({
             <section key={day} aria-label={dayLabel(day)} data-day={day} className="flex flex-col gap-3">
               <h3
                 aria-current={day === today ? "date" : undefined}
-                className="sticky top-[calc(var(--shell-top)+4rem)] z-10 flex items-center gap-3 rounded-control bg-canvas px-4 py-2 text-base font-normal"
+                className="sticky top-0 z-10 flex items-center gap-3 rounded-control bg-canvas px-4 py-2 text-base font-normal"
               >
                 <span className="text-label">{DAYS[dowOf(day)]}</span>
                 <DayNumber day={day} today={day === today} />
@@ -465,7 +475,16 @@ function CalendarBody({ schema }: { schema: Schema }) {
   const items = usePostItems(from, to)
   const open = useOpenPost()
   const now = useNow(zone)
-  const wide = useMedia("(min-width: 768px)")
+  // Columns need room: the width of the calendar box itself, so the panel opening beside it
+  // switches to day bands instead of scrolling sideways. Bands are the first paint (the safe layout).
+  const [box, width] = useElementWidth<HTMLDivElement>()
+  const columns = width !== null && width >= COLUMNS_MIN
+  // The layout switched (the panel closed): give focus to the post that opened it, if one waits.
+  React.useEffect(() => {
+    settleFocus()
+  }, [columns])
+  const { session } = useAppData()
+  const role = session.state === "ok" ? session.data.role : null
   const post = params.get("post")
 
   const days = React.useMemo(() => {
@@ -497,115 +516,78 @@ function CalendarBody({ schema }: { schema: Schema }) {
   const inRange = today >= from && today <= to
   const month = parseDate(date)[1]
 
-  return (
-    <div className="flex flex-col gap-8">
-      <header className="flex flex-wrap items-end justify-between gap-x-10 gap-y-6">
-        <div>
-          <h1 className="text-4xl tracking-tight">
-            <span className="sr-only">Calendar: </span>
-            {rangeLabel(view, date)}
-          </h1>
-          <p className="mt-2 text-sm text-label">
-            Times in {zone ?? "the zone each post carries"}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-x-10 gap-y-4">
-          <Figure value={visible.length} label={view === "week" ? "This week" : "This month"} />
-          <Figure
-            value={visible.filter(({ row }) => row.status === "pending_approval").length}
-            label="Awaiting approval"
-          />
-          <Figure
-            value={visible.filter(({ row }) => row.status === "published").length}
-            label="Published"
-          />
-        </div>
-      </header>
+  const offset = zoneOffset(zone)
+  const count = visible.length
+  const awaiting = visible.filter(({ row }) => row.status === "pending_approval").length
+  const published = visible.filter(({ row }) => row.status === "published").length
+  const label = view === "week" ? "Week calendar" : "Month calendar"
 
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          aria-label={`Previous ${unit}`}
-          onClick={() => step(-1)}
-          className="press inline-flex size-10 items-center justify-center rounded-full border border-control bg-surface hover:bg-muted"
-        >
-          <ChevronLeft aria-hidden="true" strokeWidth={1.5} className="size-5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => set({ date: today })}
-          className={cn(pillClass(inRange), "h-10")}
-        >
-          Today
-        </button>
-        <button
-          type="button"
-          aria-label={`Next ${unit}`}
-          onClick={() => step(1)}
-          className="press inline-flex size-10 items-center justify-center rounded-full border border-control bg-surface hover:bg-muted"
-        >
-          <ChevronRight aria-hidden="true" strokeWidth={1.5} className="size-5" />
-        </button>
-        <div role="group" aria-label="View" className="ml-auto flex rounded-full bg-muted p-1">
-          {(["week", "month"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              aria-pressed={view === v}
-              onClick={() => set({ view: v, date })}
-              className={cn(
-                "press h-9 rounded-full px-5 text-sm",
-                view === v ? "bg-pill text-pill-foreground" : "text-ink hover:bg-accent"
-              )}
-            >
-              {v === "week" ? "Week" : "Month"}
-            </button>
-          ))}
+  return (
+    <>
+      <CalendarToolbar
+        view={view}
+        date={date}
+        inRange={inRange}
+        step={step}
+        today={() => set({ date: today })}
+        onView={(next) => set({ view: next, date })}
+      />
+      <FilterStrip
+        summary={
+          <>
+            <span title={zone ?? undefined}>
+              <span className="sr-only">Times in </span>
+              {offset ?? "the zone each post carries"}
+            </span>
+            {` · ${count} ${count === 1 ? "post" : "posts"} · ${awaiting} ${statusLabel("pending_approval", role).toLowerCase()} · ${published} published`}
+          </>
+        }
+      />
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 md:px-6">
+        <div ref={box} className="h-full">
+          {items.state === "loading" ? (
+            <CalendarSkeleton />
+          ) : items.state === "error" ? (
+            <ErrorPanel error={items.refusal} />
+          ) : visible.length === 0 ? (
+            <EmptyState
+              icon={CalendarDays}
+              line={`No posts in this ${unit}${FILTER_KEYS.some((key) => params.get(key)) ? " with these filters" : ""}. Agents add posts through the CLI.`}
+              command="brandcal add --as NAME ..."
+            />
+          ) : !columns ? (
+            <DayList
+              days={days}
+              byDay={byDay}
+              today={today}
+              open={open}
+              post={post}
+              quietDays={view === "week"}
+              label={label}
+            />
+          ) : view === "week" ? (
+            <WeekGrid
+              days={days}
+              byDay={byDay}
+              today={today}
+              now={inRange ? now : null}
+              zone={zone}
+              open={open}
+              post={post}
+            />
+          ) : (
+            <MonthGrid
+              days={days}
+              month={month}
+              byDay={byDay}
+              today={today}
+              open={open}
+              post={post}
+            />
+          )}
         </div>
       </div>
-
-      <FiltersBar closedByDefault />
-
-      {items.state === "loading" ? (
-        <CalendarSkeleton />
-      ) : items.state === "error" ? (
-        <ErrorPanel error={items.refusal} />
-      ) : visible.length === 0 ? (
-        <EmptyState
-          icon={CalendarDays}
-          line={`No posts in this ${unit}${FILTER_KEYS.some((key) => params.get(key)) ? " with these filters" : ""}. Agents add posts through the CLI.`}
-          command="brandcal add --as NAME ..."
-        />
-      ) : !wide ? (
-        <DayList
-          days={days}
-          byDay={byDay}
-          today={today}
-          open={open}
-          post={post}
-          quietDays={view === "week"}
-        />
-      ) : view === "week" ? (
-        <WeekGrid
-          days={days}
-          byDay={byDay}
-          today={today}
-          now={inRange ? now : null}
-          zone={zone}
-          open={open}
-          post={post}
-        />
-      ) : (
-        <MonthGrid
-          days={days}
-          month={month}
-          byDay={byDay}
-          today={today}
-          open={open}
-          post={post}
-        />
-      )}
-    </div>
+    </>
   )
 }
 

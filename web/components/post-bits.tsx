@@ -65,7 +65,7 @@ export function PostBadges({ post, compact }: { post: PostDetail; compact?: bool
       key={id}
       data-badge={id}
       title={text}
-      className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs leading-5 text-ink"
+      className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[0.8125rem] leading-5 text-ink"
     >
       <Icon aria-hidden="true" strokeWidth={1.5} className="size-3.5 shrink-0" />
       {compact ? <span className="sr-only">{text}</span> : text}
@@ -80,6 +80,27 @@ export const takeOpener = () => {
   const el = opener
   opener = null
   return el
+}
+
+// When the opener is gone by the time the panel closes (the calendar swaps columns for day bands
+// while the panel is open, and back after), focus goes to the same post's new button once the
+// layout has settled: the calendar calls settleFocus() after it switches, and a timer covers the
+// case where nothing switches.
+let pendingFocus: string | null = null
+
+export function focusPostLater(id: string) {
+  pendingFocus = id
+  window.setTimeout(settleFocus, 400)
+}
+
+export function settleFocus() {
+  if (pendingFocus === null) return
+  const found = document.querySelector<HTMLElement>(`button[data-post-id="${pendingFocus}"]`)
+  pendingFocus = null
+  const target = found ?? document.querySelector<HTMLElement>("h1")
+  if (!target) return
+  if (!target.hasAttribute("tabindex") && target.tagName === "H1") target.tabIndex = -1
+  target.focus({ preventScroll: true })
 }
 
 /** Open a post in the side panel (`?post=ID`) from any view; `from` gets focus back on close. */
