@@ -7,7 +7,18 @@ import time
 from typing import Any
 
 import pytest
-from jwt_env import APPROVER, AUD, JWKS_URL, TEAM, VIEWER, FakeJwks, Signer, claims
+from jwt_env import (
+    APPROVER,
+    AUD,
+    JWKS_URL,
+    RELAY_AUD,
+    TEAM,
+    VIEWER,
+    FakeJwks,
+    Signer,
+    claims,
+    service_claims,
+)
 
 from brandcal import identity
 from brandcal.errors import BrandcalError, ErrorCode
@@ -60,7 +71,29 @@ def test_aud_may_be_a_plain_string(signer: Signer) -> None:
 
 
 def test_aud_list_with_other_audiences_is_accepted(signer: Signer) -> None:
-    assert make(FakeJwks(signer)).verify(signer.token(claims(aud=["other", AUD]))) == APPROVER
+    # Flipped by the U4 relay spec 13.1: the audience must match exactly, so the right AUD
+    # next to any other entry is refused (the name is kept so the change is easy to trace).
+    refused(make(FakeJwks(signer)), signer.token(claims(aud=["other", AUD])))
+
+
+@pytest.mark.parametrize(
+    "aud", [[AUD, "other"], [AUD, AUD], [AUD, ""], [AUD, None], [[AUD]], {"aud": AUD}, 42]
+)
+def test_aud_must_be_exactly_the_configured_audience(signer: Signer, aud: object) -> None:
+    msg = refused(make(FakeJwks(signer)), signer.token(claims(aud=aud)))
+    assert "different application" in msg
+
+
+def test_relay_app_token_is_refused(signer: Signer) -> None:
+    # Same team key, but minted for the "brandcal (relay)" Access app (spec 3b rule 1).
+    msg = refused(make(FakeJwks(signer)), signer.token(claims(aud=[RELAY_AUD])))
+    assert "different application" in msg
+
+
+def test_service_token_jwt_is_refused(signer: Signer) -> None:
+    # A real Access service-token JWT: right aud, a common_name, empty sub, no email (3b rule 2).
+    msg = refused(make(FakeJwks(signer)), signer.token(service_claims()))
+    assert "no email" in msg
 
 
 def test_jwks_is_cached_for_the_configured_minutes(signer: Signer) -> None:

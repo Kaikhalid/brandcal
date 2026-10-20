@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 TEAM = "example.cloudflareaccess.com"
 AUD = "example-aud-tag"
+RELAY_AUD = "example-relay-aud-tag"  # the connector's own Access app (U4 relay spec 3)
 ISS = f"https://{TEAM}"
 JWKS_URL = f"https://{TEAM}/cdn-cgi/access/certs"
 APPROVER = "approver@example.com"
@@ -41,6 +42,11 @@ def claims(**overrides: Any) -> dict[str, Any]:
     }
     out.update(overrides)
     return {k: v for k, v in out.items() if v is not None}
+
+
+def service_claims(**overrides: Any) -> dict[str, Any]:
+    """Claims shaped like an Access service-token JWT: a common_name, an empty sub, no email."""
+    return claims(email=None, common_name="example-client-id.access", sub="", **overrides)
 
 
 class Signer:

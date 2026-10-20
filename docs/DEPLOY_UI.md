@@ -42,6 +42,9 @@ Add a `serve` block to `BRANDCAL_HOME/config.json` (UI_SPEC 2.6):
   the issuer `https://example.cloudflareaccess.com` and the key URL
   `https://example.cloudflareaccess.com/cdn-cgi/access/certs` from it.
 - `audience` is the AUD tag of the Access application (step 4). Fill it in, then restart.
+  brandcal accepts a token only if its `aud` is exactly this tag: a string, or a list holding
+  that one entry. A token for any other application, or for this one plus others, is refused
+  with `IDENTITY_UNVERIFIED`.
 - `approver-1` must be an agent with role `approver`; `console` an agent with role `system`.
 - Emails are matched case-insensitively.
 
