@@ -12,6 +12,8 @@ Exit 0 is success and exit 1 is never used deliberately (it means an unexpected 
 | 2 | `EXTRA_NOT_INSTALLED` | An optional extra this feature needs (cryptography for Access JWTs) is not installed. |
 | 2 | `HOME_NOT_CONFIGURED` | No data directory is configured (BRANDCAL_HOME or --home). |
 | 2 | `NO_AGENT` | No acting agent given (--as or BRANDCAL_AGENT), or the agent is unknown. |
+| 2 | `PROTOCOL_MISMATCH` | The relay does not speak protocol v1 (close 4002); update brandcal or the Worker. |
+| 2 | `SECRET_UNAVAILABLE` | A relay secret file is missing, unreadable or empty, or the token file is malformed. |
 | 2 | `TZ_NOT_CONFIGURED` | No display timezone is configured (config.json "timezone" or BRANDCAL_TZ). |
 | 3 | `BAD_TIME` | A date or time could not be parsed. |
 | 3 | `BAD_WINDOW` | A time window is not a valid ISO 8601 interval within one local date. |
@@ -23,6 +25,7 @@ Exit 0 is success and exit 1 is never used deliberately (it means an unexpected 
 | 3 | `TOO_LONG` | A part's text is over the platform's character limit. |
 | 4 | `BAD_ORIGIN` | A write came from an origin or host that serve.allowed_origins does not list. |
 | 4 | `COMMENT_NOT_DELEGATED` | Agents never post comments unless a human has delegated that exact comment. |
+| 4 | `CONNECTOR_REFUSED` | The relay refused the connector's credentials (HTTP 401 or 403, or close 4003). |
 | 4 | `IDENTITY_UNMAPPED` | The identity is verified but is not listed as an approver or viewer in serve.approvers. |
 | 4 | `IDENTITY_UNVERIFIED` | No verified identity (Access JWT) backs this decision; the CLI and dev mode cannot decide. |
 | 4 | `ROLE_NOT_ALLOWED` | The acting agent's role may not do this. |
@@ -40,5 +43,6 @@ Exit 0 is success and exit 1 is never used deliberately (it means an unexpected 
 | 7 | `NOT_FOUND` | No such post in the live calendar. |
 | 8 | `CHECK_LIVE_FIRST` | A previous claim expired; confirm the post is not already live first. |
 | 8 | `CLAIMED` | The post is claimed for publishing by a manager. |
+| 8 | `CONNECTOR_REPLACED` | A newer connector took over the relay (close 4001), so this one stopped. |
 | 8 | `URL_CONFLICT` | The post is already published with a different URL. |
 | 9 | `INTERNAL` | An unexpected fault in `brandcal serve`; the reply carries no detail (HTTP 500). |

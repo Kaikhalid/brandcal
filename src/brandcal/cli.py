@@ -22,6 +22,7 @@ from brandcal import (
     migrate_v1,
     posts,
     publish,
+    relay,
     reports,
     serve,
     sweep,
@@ -129,6 +130,12 @@ COMMANDS: dict[str, tuple[str, list[str], list[str]]] = {
         "[--port N] [--dev-unverified]",
         ["admin"],
         ["BAD_ARGS", "NO_AGENT", "ROLE_NOT_ALLOWED", "EXTRA_NOT_INSTALLED"],
+    ),
+    "relay": (
+        "[--local-dev]",
+        ["admin"],
+        ["BAD_ARGS", "NO_AGENT", "ROLE_NOT_ALLOWED", "SECRET_UNAVAILABLE", "CONNECTOR_REFUSED"]
+        + ["CONNECTOR_REPLACED", "PROTOCOL_MISMATCH"],
     ),
     "migrate": (
         "FILE [--dry-run] [--out FILE] [--owner NAME]",
@@ -282,6 +289,8 @@ def build_parser() -> argparse.ArgumentParser:
     serve_p = sub.add_parser("serve", parents=[common], add_help=False)
     serve_p.add_argument("--port", type=int)
     serve_p.add_argument("--dev-unverified", action="store_true")
+    relay_p = sub.add_parser("relay", parents=[common], add_help=False)
+    relay_p.add_argument("--local-dev", action="store_true")
     migrate_p = sub.add_parser("migrate", parents=[common], add_help=False)
     migrate_p.add_argument("file")
     migrate_p.add_argument("--dry-run", action="store_true")
@@ -653,6 +662,16 @@ def cmd_serve(args: argparse.Namespace) -> dict[str, object]:
     return serve.run(base, cfg, args.port, args.dev_unverified)
 
 
+def cmd_relay(args: argparse.Namespace) -> dict[str, object]:
+    """Connect to the Worker relay and replay its requests to `serve`; runs until SIGTERM."""
+    base = cfgmod.home(args.home)
+    cfg = cfgmod.load_config(base)
+    if actor(args, cfg)[1] != "admin":
+        raise BrandcalError(ErrorCode.ROLE_NOT_ALLOWED, "Only an admin may run relay.")
+    cfgmod.display_tz(cfg)
+    return relay.run(base, cfg, args.local_dev)
+
+
 def cmd_migrate(args: argparse.Namespace) -> dict[str, object]:
     with _session(args) as s:
         if s.role != "admin":
@@ -676,6 +695,7 @@ def cmd_migrate(args: argparse.Namespace) -> dict[str, object]:
 
 COMMAND_FUNCS = {
     "serve": cmd_serve,
+    "relay": cmd_relay,
     "archive": cmd_archive,
     "migrate": cmd_migrate,
     "export": cmd_export,

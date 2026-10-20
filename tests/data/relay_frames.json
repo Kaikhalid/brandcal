@@ -1,0 +1,282 @@
+{
+ "about": "Golden vectors for brandcal-relay.v1 frames (docs/RELAY_CONNECTOR.md). Shared by tests/test_relay_frames.py and the Worker's TypeScript tests. hex is the whole binary WebSocket message. JSON payloads compare as parsed JSON.",
+ "max_frame": 1048576,
+ "valid": [
+  {
+   "name": "hello",
+   "hex": "00000000007b2276223a312c226167656e74223a226272616e6463616c2d72656c61792f302e302e302d74657374227d",
+   "type": "HELLO",
+   "stream": 0,
+   "json": {
+    "v": 1,
+    "agent": "brandcal-relay/0.0.0-test"
+   }
+  },
+  {
+   "name": "challenge",
+   "hex": "0100000000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+   "type": "CHALLENGE",
+   "stream": 0,
+   "payload_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+  },
+  {
+   "name": "proof",
+   "hex": "0200000000202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+   "type": "PROOF",
+   "stream": 0,
+   "payload_hex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+  },
+  {
+   "name": "ready",
+   "hex": "03000000007b2276223a312c226d61785f73747265616d73223a31367d",
+   "type": "READY",
+   "stream": 0,
+   "json": {
+    "v": 1,
+    "max_streams": 16
+   }
+  },
+  {
+   "name": "req_get",
+   "hex": "1000000007000000757b226d223a22474554222c2270223a222f6170692f73657373696f6e222c2268223a5b5b22486f7374222c226272616e6463616c2e6578616d706c652e636f6d225d2c5b2243662d4163636573732d4a77742d417373657274696f6e222c226533302e6533302e653330225d5d2c22626c223a307d",
+   "type": "REQ",
+   "stream": 7,
+   "req": {
+    "m": "GET",
+    "p": "/api/session",
+    "h": [
+     [
+      "Host",
+      "brandcal.example.com"
+     ],
+     [
+      "Cf-Access-Jwt-Assertion",
+      "e30.e30.e30"
+     ]
+    ],
+    "body_hex": ""
+   }
+  },
+  {
+   "name": "req_post",
+   "hex": "1000000008000000a77b226d223a22504f5354222c2270223a222f6170692f706f7374732f70303030312f617070726f7665222c2268223a5b5b22486f7374222c226272616e6463616c2e6578616d706c652e636f6d225d2c5b22436f6e74656e742d54797065222c226170706c69636174696f6e2f6a736f6e225d2c5b224f726967696e222c2268747470733a2f2f6272616e6463616c2e6578616d706c652e636f6d225d5d2c22626c223a31337d7b2276657273696f6e223a317d",
+   "type": "REQ",
+   "stream": 8,
+   "req": {
+    "m": "POST",
+    "p": "/api/posts/p0001/approve",
+    "h": [
+     [
+      "Host",
+      "brandcal.example.com"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "Origin",
+      "https://brandcal.example.com"
+     ]
+    ],
+    "body_hex": "7b2276657273696f6e223a317d"
+   }
+  },
+  {
+   "name": "req_binary_body",
+   "hex": "1000000009000000427b226d223a22504f5354222c2270223a222f78222c2268223a5b5b22486f7374222c226272616e6463616c2e6578616d706c652e636f6d225d5d2c22626c223a337d00ff0a",
+   "type": "REQ",
+   "stream": 9,
+   "req": {
+    "m": "POST",
+    "p": "/x",
+    "h": [
+     [
+      "Host",
+      "brandcal.example.com"
+     ]
+    ],
+    "body_hex": "00ff0a"
+   }
+  },
+  {
+   "name": "cancel",
+   "hex": "1100000007",
+   "type": "CANCEL",
+   "stream": 7,
+   "payload_hex": ""
+  },
+  {
+   "name": "res_head",
+   "hex": "20000000077b2273223a3230302c2268223a5b5b22436f6e74656e742d54797065222c22746578742f68746d6c3b20636861727365743d7574662d38225d5d2c22626c223a357d",
+   "type": "RES_HEAD",
+   "stream": 7,
+   "json": {
+    "s": 200,
+    "h": [
+     [
+      "Content-Type",
+      "text/html; charset=utf-8"
+     ]
+    ],
+    "bl": 5
+   }
+  },
+  {
+   "name": "res_head_unknown_length",
+   "hex": "20000000077b2273223a3330382c2268223a5b5b224c6f636174696f6e222c222f6d76702f225d5d2c22626c223a6e756c6c7d",
+   "type": "RES_HEAD",
+   "stream": 7,
+   "json": {
+    "s": 308,
+    "h": [
+     [
+      "Location",
+      "/mvp/"
+     ]
+    ],
+    "bl": null
+   }
+  },
+  {
+   "name": "res_body",
+   "hex": "210000000768656c6c6f",
+   "type": "RES_BODY",
+   "stream": 7,
+   "payload_hex": "68656c6c6f"
+  },
+  {
+   "name": "res_body_empty",
+   "hex": "2100000007",
+   "type": "RES_BODY",
+   "stream": 7,
+   "payload_hex": ""
+  },
+  {
+   "name": "res_end",
+   "hex": "2200000007",
+   "type": "RES_END",
+   "stream": 7,
+   "payload_hex": ""
+  },
+  {
+   "name": "res_err",
+   "hex": "23000000097b22636f6465223a22544f4f5f4c41524745227d",
+   "type": "RES_ERR",
+   "stream": 9,
+   "json": {
+    "code": "TOO_LARGE"
+   }
+  }
+ ],
+ "malformed": [
+  {
+   "name": "empty",
+   "where": "frame",
+   "hex": "",
+   "reason": "shorter than the 5-byte head"
+  },
+  {
+   "name": "four_bytes",
+   "where": "frame",
+   "hex": "00000000",
+   "reason": "shorter than the 5-byte head"
+  },
+  {
+   "name": "unknown_type",
+   "where": "frame",
+   "hex": "7f00000001",
+   "reason": "unknown frame type"
+  },
+  {
+   "name": "hello_with_stream",
+   "where": "frame",
+   "hex": "00000000017b7d",
+   "reason": "connection frame with a stream id"
+  },
+  {
+   "name": "req_on_stream_zero",
+   "where": "frame",
+   "hex": "1000000000",
+   "reason": "stream frame with stream id 0"
+  },
+  {
+   "name": "challenge_31_bytes",
+   "where": "frame",
+   "hex": "010000000000000000000000000000000000000000000000000000000000000000000000",
+   "reason": "nonce is not 32 bytes"
+  },
+  {
+   "name": "proof_33_bytes",
+   "where": "frame",
+   "hex": "0200000000000000000000000000000000000000000000000000000000000000000000000000",
+   "reason": "proof is not 32 bytes"
+  },
+  {
+   "name": "cancel_with_payload",
+   "where": "frame",
+   "hex": "110000000178",
+   "reason": "CANCEL carries no payload"
+  },
+  {
+   "name": "res_end_with_payload",
+   "where": "frame",
+   "hex": "220000000178",
+   "reason": "RES_END carries no payload"
+  },
+  {
+   "name": "req_no_json_length",
+   "where": "req",
+   "hex": "10000000030000",
+   "reason": "payload under 4 bytes"
+  },
+  {
+   "name": "req_json_runs_past_frame",
+   "where": "req",
+   "hex": "1000000003000003e87b7d",
+   "reason": "json_len beyond the frame"
+  },
+  {
+   "name": "req_not_json",
+   "where": "req",
+   "hex": "100000000300000003616263",
+   "reason": "not JSON"
+  },
+  {
+   "name": "req_json_not_object",
+   "where": "req",
+   "hex": "1000000003000000025b5d",
+   "reason": "JSON is not an object"
+  },
+  {
+   "name": "req_missing_method",
+   "where": "req",
+   "hex": "10000000030000001c7b2270223a222f222c2268223a5b5d2c22626c223a307d2020202020",
+   "reason": "m is missing"
+  },
+  {
+   "name": "req_bad_header_pair",
+   "where": "req",
+   "hex": "1000000003000000267b226d223a22474554222c2270223a222f222c2268223a5b5b2261225d5d2c22626c223a307d",
+   "reason": "header is not a pair"
+  },
+  {
+   "name": "req_header_not_text",
+   "where": "req",
+   "hex": "1000000003000000287b226d223a22474554222c2270223a222f222c2268223a5b5b2261222c315d5d2c22626c223a307d",
+   "reason": "header value is not text"
+  },
+  {
+   "name": "req_bl_mismatch",
+   "where": "req",
+   "hex": "1000000003000000227b226d223a22504f5354222c2270223a222f222c2268223a5b5d2c22626c223a357d7879",
+   "reason": "bl differs from the body length"
+  }
+ ],
+ "proof": {
+  "secret": "test-relay-secret-not-real",
+  "nonce_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "label": "brandcal-relay.v1",
+  "hmac_hex": "1e14ca77472421dff548078dbe657f469d7877c01265c3af7858ce354b996c61"
+ }
+}
