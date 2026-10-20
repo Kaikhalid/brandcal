@@ -81,7 +81,7 @@ function PlatformDot({ platform, className }: { platform: string; className?: st
 function PlatformMark({ platform, className }: { platform: string; className?: string }) {
   const Icon = isKnown(platform) ? Megaphone : Globe
   return (
-    <span data-platform={platform} className={cn("inline-flex items-center gap-1.5 text-xs", className)}>
+    <span data-platform={platform} className={cn("inline-flex items-center gap-1.5 text-[0.8125rem]", className)}>
       <Icon aria-hidden="true" strokeWidth={1.5} className="size-4 shrink-0" />
       {platformLabel(platform)}
     </span>

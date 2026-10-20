@@ -154,6 +154,23 @@ section gaps 56, card padding 8 outside and 20 inside. Controls are at least 40 
 (24 px is the WCAG 2.5.8 floor, never go under it); extend small targets with a pseudo-element
 and never let two hit areas overlap.
 
+### Layout (the calendar is the hero)
+
+- **One bar.** The shell's glass bar (64 px, two rows on a phone) is also the page toolbar: the
+  page puts its title, navigation and controls into it through `ToolbarPortal`
+  (`components/toolbar.tsx`). No second title row, no padding above the content on `/`.
+- **One strip.** Under the bar, a 32 px strip carries the zone offset (`+03:00`, from
+  `schema.timezone`), the counts and the removable chips of the active filters.
+- **One scroller.** On `/` the shell column is one screen tall and the calendar fills what is left;
+  it scrolls inside itself with sticky day headings, and the page does not scroll. Bottom
+  `scroll-padding` keeps a focused control clear of the notice card.
+- **Container width, not viewport.** The calendar reads the width of its own box
+  (`useElementWidth`): from 880 px seven day columns, below that day bands. The post panel opening
+  beside it therefore never causes sideways scroll. The bar's controls collapse to icon buttons by
+  the width of the content column (a container query at 1100 px).
+- **Gutters** 24 px (16 below 640), gaps 8 and 16. Gaps between wells are 8 px and a soft shadow,
+  not borders.
+
 ## 7. Motion
 
 | Token | Value | Use |
@@ -198,7 +215,14 @@ and never let two hit areas overlap.
 - **Circular icon buttons.** 40 px, `rounded-full`, 1.5 px outline icon, a 3:1 boundary, an
   `aria-label`, press scale 0.96.
 - **Sidebar.** Glass on `--sidebar`, 1 px `--hairline` divider, the current item is a black pill.
-  At 320 px it collapses (WCAG 1.4.10).
+  256 px open, a 64 px rail (icons centred in 40 px links, labels `sr-only` so the name survives,
+  the waiting count as a dot with its "N waiting" text outside the badge, a theme menu beside the
+  avatar), a sheet below 768 px. Width moves 300 ms with `--ease-out`. With no saved choice a
+  768 to 1179 px window starts as the rail; a saved choice always wins.
+- **Popover.** Base UI Popover, non-modal, `card-surface` with the floating shadow; opacity and
+  scale 0.96 to 1 from the trigger, 150 ms in and 100 ms out; Esc closes and returns focus.
+- **Needs you chip.** The one coloured control in the bar: `bg-st-awaiting text-st-awaiting-ink`,
+  clock icon and count, `aria-pressed`; pressed adds a 2 px ink ring.
 - **Floating panel.** Glass, `rounded-card`, the floating shadow, focus moves in and returns to
   the trigger on close; scrolled content never hides a focused control (`scroll-padding-top`).
 - **Focus.** `:focus-visible` is a 2 px ring in `--focus-ring` with a 2 px offset, never

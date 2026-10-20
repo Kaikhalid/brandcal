@@ -1,32 +1,33 @@
 1:"$Sreact.fragment"
-2:"/_next/static/chunks/0_i_9eawi08q9.js"
-3:"/_next/static/chunks/3_sis1rtplbt8.js"
-4:"/_next/static/chunks/2jisqbm16_3r-.js"
-5:"/_next/static/chunks/0btd8a5bzrv-s.js"
-6:"ShortcutsProvider"
-7:I[15428,["$2","$3","$4","$5"],"$6"]
-8:I[89554,["$2","$3","$4","$5"],"ThemeProvider"]
-9:I[48026,["$2","$3","$4","$5"],"AppShell"]
-a:I[39756,["$2","$3","$4","$5"],"default"]
-b:I[37457,["$2","$3","$4","$5"],"default"]
-f:"$Sreact.suspense"
-10:"/_next/static/chunks/24qumx1sq9r8t.js"
-11:I[18830,["$2","$3","$4","$5","$10"],"ChannelsView"]
-12:I[97367,["$2","$3","$4","$5"],"OutletBoundary"]
-14:"ViewportBoundary"
-15:I[97367,["$2","$3","$4","$5"],"$14"]
-17:"MetadataBoundary"
-18:I[97367,["$2","$3","$4","$5"],"$17"]
-1a:I[68027,["$2","$3","$4","$5"],"default",1]
-:HL["/_next/static/chunks/0pythmq1s86u2.css","style"]
+2:"/_next/static/chunks/0u7ov9vh7w85v.js"
+3:"/_next/static/chunks/131lxu2q_gkr9.js"
+4:"/_next/static/chunks/1kcyibrvopmv7.js"
+5:"/_next/static/chunks/0wd-jbccfsq9p.js"
+6:"/_next/static/chunks/3l-taqjc_xwfk.js"
+7:"ShortcutsProvider"
+8:I[15428,["$2","$3","$4","$5","$6"],"$7"]
+9:I[89554,["$2","$3","$4","$5","$6"],"ThemeProvider"]
+a:I[48026,["$2","$3","$4","$5","$6"],"AppShell"]
+b:I[39756,["$2","$3","$4","$5","$6"],"default"]
+c:I[37457,["$2","$3","$4","$5","$6"],"default"]
+10:"$Sreact.suspense"
+11:"/_next/static/chunks/24qumx1sq9r8t.js"
+12:I[18830,["$2","$3","$4","$5","$6","$11"],"ChannelsView"]
+13:I[97367,["$2","$3","$4","$5","$6"],"OutletBoundary"]
+15:"ViewportBoundary"
+16:I[97367,["$2","$3","$4","$5","$6"],"$15"]
+18:"MetadataBoundary"
+19:I[97367,["$2","$3","$4","$5","$6"],"$18"]
+1b:I[68027,["$2","$3","$4","$5","$6"],"default",1]
+:HL["/_next/static/chunks/3b5zludqp_34l.css","style"]
 :HL["/_next/static/media/GeistMono_Variable.p.074yowjdp83r3.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/_next/static/media/Geist_Variable-s.p.142kz3f7gseln.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
-d:X
-e:[["children",{"s":"__PAGE__","h":512,"d":{"r":["$","$1","c",{"children":[["$","$f",null,{"fallback":null,"children":["$","$L11",null,{}]}],[["$","script","script-0",{"src":"/_next/static/chunks/24qumx1sq9r8t.js","async":true,"nonce":"$undefined"}]],["$","$L12",null,{"children":["$","$f",null,{"name":"Next.MetadataOutlet","children":"$@13"}]}]]}],"p":false,"v":null}}]]
-c:[["children",{"s":"channels","h":512,"d":{"r":["$","$1","c",{"children":[null,["$","$La",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$Lb",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],"p":false,"v":"$d"},"c":"$Qe"}]]
-0:{"P":null,"c":["","channels",""],"q":"","i":false,"t":{"t":{"s":"","h":528,"d":{"r":["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/_next/static/chunks/0pythmq1s86u2.css","precedence":"next","crossOrigin":"$undefined","nonce":"$undefined"}],["$","script","script-0",{"src":"/_next/static/chunks/0_i_9eawi08q9.js","async":true,"nonce":"$undefined"}],["$","script","script-1",{"src":"/_next/static/chunks/3_sis1rtplbt8.js","async":true,"nonce":"$undefined"}],["$","script","script-2",{"src":"/_next/static/chunks/2jisqbm16_3r-.js","async":true,"nonce":"$undefined"}],["$","script","script-3",{"src":"/_next/static/chunks/0btd8a5bzrv-s.js","async":true,"nonce":"$undefined"}]],["$","html",null,{"lang":"en-GB","suppressHydrationWarning":true,"className":"antialiased Ur3q_a_variable iaM1Ya_variable font-sans","children":["$","body",null,{"children":["$","$L7",null,{"children":["$","$L8",null,{"children":["$","$L9",null,{"children":["$","$La",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$Lb",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":[[["$","title",null,{"children":"404: This page could not be found."}],["$","div",null,{"style":{"fontFamily":"system-ui,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\"","height":"100vh","textAlign":"center","display":"flex","flexDirection":"column","alignItems":"center","justifyContent":"center"},"children":["$","div",null,{"children":[["$","style",null,{"dangerouslySetInnerHTML":{"__html":"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}"}}],["$","h1",null,{"className":"next-error-h1","style":{"display":"inline-block","margin":"0 20px 0 0","padding":"0 23px 0 0","fontSize":24,"fontWeight":500,"verticalAlign":"top","lineHeight":"49px"},"children":404}],["$","div",null,{"style":{"display":"inline-block"},"children":["$","h2",null,{"style":{"fontSize":14,"fontWeight":400,"lineHeight":"49px","margin":0},"children":"This page could not be found."}]}]]}]}]],[]],"forbidden":"$undefined","unauthorized":"$undefined"}]}]}]}]}]}]]}],"p":false,"v":null},"c":"$Qc"},"h":{"r":["$","$1","h",{"children":[null,["$","$L15",null,{"children":"$L16"}],["$","$L18",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$f",null,{"name":"Next.Metadata","children":"$L19"}]}],null]}],["$","meta",null,{"name":"next-size-adjust","content":""}]]}],"p":false,"v":null}},"m":"$undefined","G":["$1a",[["$","link","0",{"rel":"stylesheet","href":"/_next/static/chunks/0pythmq1s86u2.css","precedence":"next","crossOrigin":"$undefined","nonce":"$undefined"}]]],"S":true,"r":"$undefined","s":"$undefined","a":"$undefined","l":"$undefined","p":"$undefined","d":"$undefined","b":"brandcal-ui"}
-d:C
-16:[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]
-1b:I[27201,["$2","$3","$4","$5"],"IconMark"]
-13:null
-19:[["$","title","0",{"children":"Channels · brandcal"}],["$","meta","1",{"name":"description","content":"The brand content calendar: what is planned, what needs you, what went out."}],["$","link","2",{"rel":"icon","href":"/favicon.ico?favicon.2vob68tjqpejf.ico","sizes":"256x256","type":"image/x-icon"}],["$","$L1b","3",{}]]
+e:X
+f:[["children",{"s":"__PAGE__","h":512,"d":{"r":["$","$1","c",{"children":[["$","$10",null,{"fallback":null,"children":["$","$L12",null,{}]}],[["$","script","script-0",{"src":"/_next/static/chunks/24qumx1sq9r8t.js","async":true,"nonce":"$undefined"}]],["$","$L13",null,{"children":["$","$10",null,{"name":"Next.MetadataOutlet","children":"$@14"}]}]]}],"p":false,"v":null}}]]
+d:[["children",{"s":"channels","h":512,"d":{"r":["$","$1","c",{"children":[null,["$","$Lb",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$Lc",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],"p":false,"v":"$e"},"c":"$Qf"}]]
+0:{"P":null,"c":["","channels",""],"q":"","i":false,"t":{"t":{"s":"","h":528,"d":{"r":["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/_next/static/chunks/3b5zludqp_34l.css","precedence":"next","crossOrigin":"$undefined","nonce":"$undefined"}],["$","script","script-0",{"src":"/_next/static/chunks/0u7ov9vh7w85v.js","async":true,"nonce":"$undefined"}],["$","script","script-1",{"src":"/_next/static/chunks/131lxu2q_gkr9.js","async":true,"nonce":"$undefined"}],["$","script","script-2",{"src":"/_next/static/chunks/1kcyibrvopmv7.js","async":true,"nonce":"$undefined"}],["$","script","script-3",{"src":"/_next/static/chunks/0wd-jbccfsq9p.js","async":true,"nonce":"$undefined"}],["$","script","script-4",{"src":"/_next/static/chunks/3l-taqjc_xwfk.js","async":true,"nonce":"$undefined"}]],["$","html",null,{"lang":"en-GB","suppressHydrationWarning":true,"className":"antialiased Ur3q_a_variable iaM1Ya_variable font-sans","children":["$","body",null,{"children":["$","$L8",null,{"children":["$","$L9",null,{"children":["$","$La",null,{"children":["$","$Lb",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$Lc",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":[[["$","title",null,{"children":"404: This page could not be found."}],["$","div",null,{"style":{"fontFamily":"system-ui,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\"","height":"100vh","textAlign":"center","display":"flex","flexDirection":"column","alignItems":"center","justifyContent":"center"},"children":["$","div",null,{"children":[["$","style",null,{"dangerouslySetInnerHTML":{"__html":"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}"}}],["$","h1",null,{"className":"next-error-h1","style":{"display":"inline-block","margin":"0 20px 0 0","padding":"0 23px 0 0","fontSize":24,"fontWeight":500,"verticalAlign":"top","lineHeight":"49px"},"children":404}],["$","div",null,{"style":{"display":"inline-block"},"children":["$","h2",null,{"style":{"fontSize":14,"fontWeight":400,"lineHeight":"49px","margin":0},"children":"This page could not be found."}]}]]}]}]],[]],"forbidden":"$undefined","unauthorized":"$undefined"}]}]}]}]}]}]]}],"p":false,"v":null},"c":"$Qd"},"h":{"r":["$","$1","h",{"children":[null,["$","$L16",null,{"children":"$L17"}],["$","$L19",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$10",null,{"name":"Next.Metadata","children":"$L1a"}]}],null]}],["$","meta",null,{"name":"next-size-adjust","content":""}]]}],"p":false,"v":null}},"m":"$undefined","G":["$1b",[["$","link","0",{"rel":"stylesheet","href":"/_next/static/chunks/3b5zludqp_34l.css","precedence":"next","crossOrigin":"$undefined","nonce":"$undefined"}]]],"S":true,"r":"$undefined","s":"$undefined","a":"$undefined","l":"$undefined","p":"$undefined","d":"$undefined","b":"brandcal-ui"}
+e:C
+17:[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]
+1c:I[27201,["$2","$3","$4","$5","$6"],"IconMark"]
+14:null
+1a:[["$","title","0",{"children":"Channels · brandcal"}],["$","meta","1",{"name":"description","content":"The brand content calendar: what is planned, what needs you, what went out."}],["$","link","2",{"rel":"icon","href":"/favicon.ico?favicon.2vob68tjqpejf.ico","sizes":"256x256","type":"image/x-icon"}],["$","$L1c","3",{}]]
