@@ -13,11 +13,22 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from jwt_env import APPROVER, AUD, TEAM, VIEWER, FakeJwks, Signer, claims
+from jwt_env import (
+    APPROVER,
+    AUD,
+    RELAY_AUD,
+    TEAM,
+    VIEWER,
+    FakeJwks,
+    Signer,
+    claims,
+    service_claims,
+)
 from ui_env import CFG, NEW_WINDOW, add_post, cli_approve, make_home, open_home, run
 
 from brandcal import actions, cli, serve
 from brandcal.config import load_config
+from brandcal.errors import BrandcalError, ErrorCode
 from brandcal.identity import Verifier
 
 ORIGIN = "https://brandcal.example.com"
@@ -464,6 +475,36 @@ def test_unmapped_identity_cannot_write(env: Env, endpoint: str) -> None:
     assert res.status == 403 and res.code == "IDENTITY_UNMAPPED"
 
 
+def not_an_approver_tokens(signer: Signer) -> dict[str, str]:
+    """U4 relay spec 3b: tokens the Worker would forward but brandcal must refuse."""
+    return {
+        "relay-app": signer.token(claims(aud=[RELAY_AUD])),
+        "service-token": signer.token(service_claims()),
+        "extra-audience": signer.token(claims(aud=[AUD, RELAY_AUD])),
+    }
+
+
+@pytest.mark.parametrize("which", ["relay-app", "service-token", "extra-audience"])
+def test_relay_and_service_tokens_get_no_session(env: Env, which: str) -> None:
+    token = not_an_approver_tokens(env.client.signer)[which]
+    res = env.client.get("/api/session", token=token)
+    assert res.status == 401 and res.code == "IDENTITY_UNVERIFIED"
+    assert token not in res.raw.decode()
+
+
+@pytest.mark.parametrize("which", ["relay-app", "service-token", "extra-audience"])
+def test_relay_and_service_tokens_cannot_approve(env: Env, which: str) -> None:
+    post = add_post(env.home)
+    good = seen(env.client, post["id"])
+    csrf = env.client.csrf()  # a valid CSRF token, with the right Origin and Host
+    before = counts(env.home)
+    token = not_an_approver_tokens(env.client.signer)[which]
+    res = env.client.post(f"/api/posts/{post['id']}/approve", good, token=token, csrf=csrf)
+    assert res.status == 401 and res.code == "IDENTITY_UNVERIFIED"
+    assert counts(env.home) == before
+    assert approvals(env.home, post["id"]) == []
+
+
 # --- write paths ---------------------------------------------------------------------------
 
 
@@ -843,3 +884,32 @@ def test_verified_start_names_the_address_only(
     write_config(home)
     code, out, err = serve_cli(capsys, home, "--as", "admin-1", "--port", "0")
     assert code == 0 and "127.0.0.1" in err and "UNVERIFIED" not in err
+
+
+def test_audience_is_read_only_from_serve_identity_audience(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # U4 relay spec 3b: no other config key or environment variable can supply the AUD.
+    seen_aud: list[str] = []
+
+    class Stop(Exception):
+        pass
+
+    def fake_make_server(*args: Any, **kwargs: Any) -> Any:
+        seen_aud.append(args[3].audience)
+        raise Stop
+
+    monkeypatch.setattr(serve, "make_server", fake_make_server)
+    for name in ("BRANDCAL_AUDIENCE", "BRANDCAL_AUD", "CF_ACCESS_AUD"):
+        monkeypatch.setenv(name, "from-the-environment")
+    ident = {"team_domain": TEAM, "audience": "from-config", "jwks_cache_minutes": 5}
+    cfg: dict[str, Any] = {"audience": "top-level", "serve": {**SERVE, "identity": ident}}
+    with pytest.raises(Stop):
+        serve.run(tmp_path, cfg, 0, dev=False)
+    assert seen_aud == ["from-config"]
+
+    elsewhere = {**SERVE, "audience": "beside-identity", "identity": {**ident, "audience": None}}
+    with pytest.raises(BrandcalError) as err:
+        serve.run(tmp_path, {"audience": "top-level", "serve": elsewhere}, 0, dev=False)
+    assert err.value.code == ErrorCode.BAD_ARGS and "serve.identity" in err.value.message
+    assert seen_aud == ["from-config"]

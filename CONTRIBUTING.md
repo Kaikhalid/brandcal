@@ -3,7 +3,7 @@
 Thank you for your interest in brandcal. The project is in early development, so please
 open an issue to discuss a change before starting on it.
 
-1. Branch from `work` and open your pull request against `work` (never `main`).
+1. Branch from `ui` and open your pull request against `ui` (never `main`).
 2. Keep changes small and focused, with tests.
 3. Run the checks before committing:
    `ruff check .`, `ruff format --check .`, `mypy src`, `pytest`,

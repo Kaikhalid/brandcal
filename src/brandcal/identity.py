@@ -177,10 +177,11 @@ class Verifier:
 
     def _email(self, claims: Mapping[str, Any]) -> str:
         """Check aud, iss, exp, nbf and return the email claim."""
+        # Exact match (U4 relay spec 13.1): the configured AUD as a string, or a list holding
+        # that one entry. A list with any other audience is refused, so a token minted for
+        # several applications never counts here.
         aud = claims.get("aud")
-        if self.audience not in (
-            [aud] if isinstance(aud, str) else aud if isinstance(aud, list) else []
-        ):
+        if aud != self.audience and aud != [self.audience]:
             raise _unverified("The token is for a different application.")
         if claims.get("iss") != self.issuer:
             raise _unverified("The token was issued by a different team.")

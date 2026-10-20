@@ -4,8 +4,8 @@ These rules apply to any AI coding agent working on this repository.
 
 ## Branches and pull requests
 
-- Work on `work` or on a feature branch created from `work`.
-- Open pull requests into `work` only.
+- Work on a feature branch created from `ui`, the integration branch.
+- Open pull requests into `ui` only. Do not push to or open pull requests into `work`.
 - **Never** push to, merge into, rebase, delete or otherwise touch `main`. Only the
   repository owner creates and merges `main`.
 - Never force-push to a shared branch.
