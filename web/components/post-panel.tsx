@@ -26,7 +26,7 @@ import {
   type Version,
 } from "@/lib/api"
 import { diffLines } from "@/lib/diff"
-import { dayLabel, fullTime, spanOf } from "@/lib/time"
+import { dayLabel, fullTime, spanOf, windowLabel } from "@/lib/time"
 import { useUrlState } from "@/lib/url-state"
 import { cn } from "@/lib/utils"
 
@@ -386,7 +386,14 @@ function Body({ data, schema, host }: { data: Data; schema: Schema; host: Action
           ["Post", <code key="p" className="font-mono">{post.id}</code>],
           ["Slug", <code key="s" className="font-mono">{post.slug}</code>],
           ["When", w && `${dayLabel(w.day)}, ${w.text}`],
-          ["Window", post.window && <code key="w" className="font-mono break-all">{post.window}</code>],
+          [
+            "Window",
+            post.window && (
+              <span key="w" title={post.window} className="tabular-nums">
+                {windowLabel(post.window, zone)}
+              </span>
+            ),
+          ],
           ["Version", String(post.content_version)],
           ["Fingerprint", <Fingerprint key="f" hash={post.content_hash} />],
         ]}

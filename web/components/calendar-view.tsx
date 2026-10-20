@@ -414,7 +414,7 @@ function DayList({
             <section key={day} aria-label={dayLabel(day)} data-day={day} className="flex flex-col gap-3">
               <h3
                 aria-current={day === today ? "date" : undefined}
-                className="sticky top-[calc(var(--shell-top)+4rem)] z-10 -mx-2 flex items-center gap-3 bg-canvas px-2 py-2 text-base font-normal"
+                className="sticky top-[calc(var(--shell-top)+4rem)] z-10 flex items-center gap-3 rounded-control bg-canvas px-4 py-2 text-base font-normal"
               >
                 <span className="text-label">{DAYS[dowOf(day)]}</span>
                 <DayNumber day={day} today={day === today} />

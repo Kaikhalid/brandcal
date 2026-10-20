@@ -234,6 +234,57 @@ def test_approver_still_refused_by_other_actions(home: Path) -> None:
             assert code_of(err) is ErrorCode.ROLE_NOT_ALLOWED
 
 
+NOT_ACCESS_JWT = [
+    "dev-unverified",
+    "trusted-header",
+    "cf-access-authenticated-user-email",
+    "ACCESS-JWT",
+    " access-jwt",
+    "access-jwt ",
+    "",
+]
+
+
+@pytest.mark.parametrize("source", NOT_ACCESS_JWT)
+def test_console_refuses_every_source_but_access_jwt(home: Path, source: str) -> None:
+    # U4 item 4: only identity_source "access-jwt", exactly, may decide or write in the console.
+    post = add_post(home)
+    console_approve(home, post)  # a real approval, so reschedule and cancel have a target
+    who = Identity("approver-1", Verified("approver@example.com", source))
+    with open_home(home) as (conn, cfg):
+        calls = {
+            "approve": lambda: actions.approve(
+                conn, cfg, who, post["id"], 1, post["hash"], "console", "console-approve", "A"
+            ),
+            "request-changes": lambda: actions.request_changes(
+                conn, cfg, who, post["id"], 1, post["hash"], "console-request-changes", "R",
+                channel="console", **THREE,
+            ),
+            "reschedule": lambda: actions.reschedule(
+                conn, cfg, who, post["id"], 1, post["hash"], NEW_WINDOW, "console-reschedule",
+                "Change time", channel="console",
+            ),
+            "cancel": lambda: actions.cancel(
+                conn, cfg, who, post["id"], "plan", "x", "console-cancel", "Cancel",
+                channel="console",
+            ),
+            "edit": lambda: actions.edit(conn, cfg, who, post["id"], ["title=X"]),
+        }  # fmt: skip
+        for name, call in calls.items():
+            with pytest.raises(BrandcalError) as err:
+                call()
+            assert code_of(err) is ErrorCode.IDENTITY_UNVERIFIED, name
+        assert conn.execute("SELECT count(*) FROM approvals").fetchone()[0] == 1
+
+
+def test_console_refuses_an_empty_verified_email(home: Path) -> None:
+    post = add_post(home)
+    for email in ("", "   "):
+        with pytest.raises(BrandcalError) as err:
+            console_approve(home, post, Identity("approver-1", Verified(email, "access-jwt")))
+        assert code_of(err) is ErrorCode.IDENTITY_UNVERIFIED
+
+
 @pytest.mark.parametrize(
     ("code", "exit_code"),
     [
