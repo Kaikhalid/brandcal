@@ -374,8 +374,12 @@ def test_the_views_fit_small_screens(
         page.context.close()
 
 
-def test_the_panel_window_reads_as_a_local_range(browser: Any, site: tuple[str, str]) -> None:
-    # U4: the Window row was the raw ISO interval, which wrapped mid-timestamp.
+def test_the_panel_hides_a_same_day_window_that_repeats_when(
+    browser: Any, site: tuple[str, str]
+) -> None:
+    # U4: a same-day Window read exactly like "When"; the row now shows only for a window that
+    # ends on a later local day (core keeps windows on one display-zone date, so only a window
+    # stored before a timezone change can do that).
     page, _ = open_page(browser, site, "/", "light", query=f"?view=week&date={DATE}")
     try:
         pid = post_id(page, "Planning day at Example Co")  # Tuesday, 10:00 to 11:00
@@ -386,11 +390,9 @@ def test_the_panel_window_reads_as_a_local_range(browser: Any, site: tuple[str, 
     )
     try:
         wait_drawn(page, "aside[data-post-panel] pre")
-        value = page.locator("aside[data-post-panel] dt:text-is('Window') + dd")
-        text = value.inner_text().strip()
-        assert re.fullmatch(r"Tue \d{1,2} [A-Z][a-z]{2} \d{4}, 10:00 to 11:00", text), text
-        raw = value.locator("span").get_attribute("title") or ""
-        assert "/" in raw and "T" in raw  # the exact ISO window stays available on hover
+        when = page.locator("aside[data-post-panel] dt:text-is('When') + dd")
+        assert re.fullmatch(r"Tue \d{1,2} [A-Z][a-z]{2}, 10:00 to 11:00", when.inner_text().strip())
+        assert page.locator("aside[data-post-panel] dt:text-is('Window')").count() == 0
         assert not problems, problems
     finally:
         page.context.close()

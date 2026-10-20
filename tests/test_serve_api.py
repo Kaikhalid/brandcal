@@ -776,6 +776,24 @@ def test_verified_mode_needs_the_identity_settings(
     assert "serve.identity" in out["error"]["message"]
 
 
+@pytest.mark.parametrize(
+    "bad",
+    [f"https://{TEAM}", f"http://{TEAM}", f"{TEAM}/", f"{TEAM}/cdn-cgi/access/certs", "a/b"],
+)
+def test_verified_mode_rejects_a_team_domain_with_a_scheme_or_slash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], bad: str
+) -> None:
+    # U4 hardening: this used to start and then fail every request with
+    # "signing keys could not be loaded".
+    home = make_home(tmp_path / "home", monkeypatch)
+    ident = {"team_domain": bad, "audience": "aud", "jwks_cache_minutes": 5}
+    write_config(home, serve={**SERVE, "identity": ident})
+    code, out, _ = serve_cli(capsys, home, "--as", "admin-1", "--port", "0")
+    assert code == 2 and out["error"]["code"] == "BAD_ARGS"
+    assert "serve.identity.team_domain" in out["error"]["message"]
+    assert "https://" in out["error"]["next"] and "DEPLOY_UI" in out["error"]["next"]
+
+
 def test_verified_mode_without_the_extra_does_not_start(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

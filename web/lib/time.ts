@@ -165,6 +165,12 @@ export function fullTime(iso: string, zone: string | null): string {
 
 /** A window as a readable local range: "Tue 10 Mar 2026, 09:00 to 10:00", or with the end day
  * when it differs: "Tue 10 Mar 2026, 23:00 to Wed 11 Mar, 01:00". */
+/** True when the window ends on a later local day, so "When" alone does not say it all. */
+export function windowSpansDays(window: string, zone: string | null): boolean {
+  const [a, b] = window.split("/")
+  return dateKey(localParts(a, zone)) !== dateKey(localParts(b ?? a, zone))
+}
+
 export function windowLabel(window: string, zone: string | null): string {
   const [a, b] = window.split("/")
   const start = localParts(a, zone)

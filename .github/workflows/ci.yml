@@ -69,9 +69,8 @@ jobs:
           fi
 
   ui-screens:
-    name: ui-screens (advisory)
+    name: ui-screens
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

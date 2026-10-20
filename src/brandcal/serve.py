@@ -627,6 +627,12 @@ def run(base: Path, cfg: Mapping[str, Any], port: int | None, dev: bool) -> dict
             raise posts.bad_args(
                 "serve.identity needs team_domain and audience.", "Set them in config.json."
             )
+        if "://" in team or "/" in team:
+            raise posts.bad_args(
+                f"serve.identity.team_domain must be a bare host name, not {team!r}.",
+                'Set it to the team host alone, for example "myteam.cloudflareaccess.com"'
+                " (no https:// and no slash); see docs/DEPLOY_UI.md.",
+            )
         if not isinstance(minutes, int | float) or isinstance(minutes, bool) or minutes <= 0:
             raise posts.bad_args(
                 "serve.identity.jwks_cache_minutes must be a number above 0.",

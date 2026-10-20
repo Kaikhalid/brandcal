@@ -26,7 +26,7 @@ import {
   type Version,
 } from "@/lib/api"
 import { diffLines } from "@/lib/diff"
-import { dayLabel, fullTime, spanOf, windowLabel } from "@/lib/time"
+import { dayLabel, fullTime, spanOf, windowLabel, windowSpansDays } from "@/lib/time"
 import { useUrlState } from "@/lib/url-state"
 import { cn } from "@/lib/utils"
 
@@ -388,7 +388,8 @@ function Body({ data, schema, host }: { data: Data; schema: Schema; host: Action
           ["When", w && `${dayLabel(w.day)}, ${w.text}`],
           [
             "Window",
-            post.window && (
+            // A same-day window reads exactly like "When"; show the row only when it adds an end day.
+            post.window && windowSpansDays(post.window, zone) && (
               <span key="w" title={post.window} className="tabular-nums">
                 {windowLabel(post.window, zone)}
               </span>
