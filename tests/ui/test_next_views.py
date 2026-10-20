@@ -372,3 +372,44 @@ def test_the_views_fit_small_screens(
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
     finally:
         page.context.close()
+
+
+def test_the_panel_window_reads_as_a_local_range(browser: Any, site: tuple[str, str]) -> None:
+    # U4: the Window row was the raw ISO interval, which wrapped mid-timestamp.
+    page, _ = open_page(browser, site, "/", "light", query=f"?view=week&date={DATE}")
+    try:
+        pid = post_id(page, "Planning day at Example Co")  # Tuesday, 10:00 to 11:00
+    finally:
+        page.context.close()
+    page, problems = open_page(
+        browser, site, "/", "light", query=f"?view=week&date={DATE}&post={pid}"
+    )
+    try:
+        wait_drawn(page, "aside[data-post-panel] pre")
+        value = page.locator("aside[data-post-panel] dt:text-is('Window') + dd")
+        text = value.inner_text().strip()
+        assert re.fullmatch(r"Tue \d{1,2} [A-Z][a-z]{2} \d{4}, 10:00 to 11:00", text), text
+        raw = value.locator("span").get_attribute("title") or ""
+        assert "/" in raw and "T" in raw  # the exact ISO window stays available on hover
+        assert not problems, problems
+    finally:
+        page.context.close()
+
+
+def test_phone_day_headings_are_as_wide_as_the_cards(browser: Any, site: tuple[str, str]) -> None:
+    # U4: at 390 px the sticky day heading stuck out 8 px on each side of the cards under it.
+    page, problems = load(browser, site, "calendar-week", "light", PHONE)
+    try:
+        pairs = page.evaluate(
+            "[...document.querySelectorAll('section[data-day]')].map(s => {"
+            " const h = s.querySelector('h3'), c = s.querySelector('button[data-post-id]');"
+            " if (!h || !c) return null;"
+            " const a = h.getBoundingClientRect(), b = c.getBoundingClientRect();"
+            " return [a.left, a.right, b.left, b.right] }).filter(Boolean)"
+        )
+        assert pairs, "no day with a card"
+        for hl, hr, cl, cr in pairs:
+            assert abs(hl - cl) <= 0.5 and abs(hr - cr) <= 0.5, (hl, hr, cl, cr)
+        assert not problems, problems
+    finally:
+        page.context.close()

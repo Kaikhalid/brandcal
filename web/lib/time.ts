@@ -162,3 +162,15 @@ export function fullTime(iso: string, zone: string | null): string {
   const t = localParts(iso, zone)
   return `${dayLabel(dateKey(t))} ${t.y}, ${clock(t)}`
 }
+
+/** A window as a readable local range: "Tue 10 Mar 2026, 09:00 to 10:00", or with the end day
+ * when it differs: "Tue 10 Mar 2026, 23:00 to Wed 11 Mar, 01:00". */
+export function windowLabel(window: string, zone: string | null): string {
+  const [a, b] = window.split("/")
+  const start = localParts(a, zone)
+  const end = localParts(b ?? a, zone)
+  const head = `${dayLabel(dateKey(start))} ${start.y}, ${clock(start)}`
+  if (dateKey(start) === dateKey(end)) return `${head} to ${clock(end)}`
+  const year = end.y === start.y ? "" : ` ${end.y}`
+  return `${head} to ${dayLabel(dateKey(end))}${year}, ${clock(end)}`
+}
