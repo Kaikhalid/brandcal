@@ -135,3 +135,23 @@ jobs:
           name: ui-next-shots
           path: build/ui-shots
           if-no-files-found: warn
+
+  relay:
+    name: relay (Worker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: relay/package-lock.json
+      - name: Install
+        run: npm ci
+        working-directory: relay
+      - name: Typecheck
+        run: npx tsc --noEmit
+        working-directory: relay
+      - name: Tests
+        run: npx vitest run
+        working-directory: relay
