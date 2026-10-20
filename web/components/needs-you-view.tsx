@@ -3,7 +3,7 @@
 import { Inbox } from "lucide-react"
 import * as React from "react"
 
-import type { Loadable } from "@/components/app-data"
+import { useAppData, type Loadable } from "@/components/app-data"
 import { EmptyState } from "@/components/empty-state"
 import { ErrorPanel } from "@/components/error-panel"
 import { LoadingState } from "@/components/loading-state"
@@ -85,6 +85,7 @@ function Sections({ schema, groups }: { schema: Schema; groups: NeedsGroup[] }) 
 
 function Loaded({ schema }: { schema: Schema }) {
   const [state, setState] = React.useState<Loadable<NeedsGroup[]>>({ state: "loading" })
+  const { epoch } = useAppData()
   React.useEffect(() => {
     let live = true
     loadNeedsYou(schema).then((r) => {
@@ -93,7 +94,7 @@ function Loaded({ schema }: { schema: Schema }) {
     return () => {
       live = false
     }
-  }, [schema])
+  }, [schema, epoch])
   if (state.state === "loading") return <LoadingState label="Loading what needs you" rows={3} />
   if (state.state === "error") return <ErrorPanel error={state.refusal} />
   return <Sections schema={schema} groups={state.data} />

@@ -3,6 +3,7 @@
 import { Activity } from "lucide-react"
 import * as React from "react"
 
+import { useAppData } from "@/components/app-data"
 import { EmptyState } from "@/components/empty-state"
 import { ErrorPanel } from "@/components/error-panel"
 import { LoadingState } from "@/components/loading-state"
@@ -48,6 +49,7 @@ function Log({ schema, posts }: { schema: Schema; posts: PostRow[] }) {
   const { params, set } = useUrlState()
   const open = useOpenPost()
   const post = params.get("for") ?? ""
+  const { epoch } = useAppData()
   // What was read is kept with the post filter it belongs to; another filter reads as loading.
   const [read, setRead] = React.useState<{ post: string; log?: LogState; error?: BrandcalRefusal } | null>(null)
   const [shown, setShown] = React.useState(SHOWN)
@@ -67,7 +69,7 @@ function Log({ schema, posts }: { schema: Schema; posts: PostRow[] }) {
     return () => {
       live = false
     }
-  }, [post])
+  }, [post, epoch])
 
   async function checkForNew() {
     if (!log) return

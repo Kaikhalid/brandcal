@@ -24,12 +24,18 @@ type AppData = {
   schema: Loadable<Schema>
   /** Posts in the statuses that need the viewer (schema.needs_you), as the MVP strip counts them. */
   needsYou: Loadable<number>
+  /** Counts the writes that happened; a view that lists posts reads again when it changes. */
+  epoch: number
+  /** Tell every view a write happened: the Needs you badge reloads now, the views follow epoch. */
+  refresh: () => void
 }
 
 const LOADING: AppData = {
   session: { state: "loading" },
   schema: { state: "loading" },
   needsYou: { state: "loading" },
+  epoch: 0,
+  refresh: () => undefined,
 }
 
 const AppDataContext = React.createContext<AppData>(LOADING)
@@ -45,6 +51,19 @@ async function loadNeedsCount(schema: Schema): Promise<Loadable<number>> {
 
 function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = React.useState<AppData>(LOADING)
+  const [epoch, setEpoch] = React.useState(0)
+  const refresh = React.useCallback(() => setEpoch((n) => n + 1), [])
+  const schema = data.schema.state === "ok" ? data.schema.data : null
+
+  // After a write: read the Needs you count again (the old number stays until the new one is in).
+  React.useEffect(() => {
+    if (epoch === 0 || !schema) return
+    let live = true
+    loadNeedsCount(schema).then((needsYou) => live && setData((prev) => ({ ...prev, needsYou })))
+    return () => {
+      live = false
+    }
+  }, [epoch, schema])
 
   React.useEffect(() => {
     let live = true
@@ -62,7 +81,8 @@ function AppDataProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  return <AppDataContext.Provider value={data}>{children}</AppDataContext.Provider>
+  const value = React.useMemo(() => ({ ...data, epoch, refresh }), [data, epoch, refresh])
+  return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>
 }
 
 export { AppDataProvider }

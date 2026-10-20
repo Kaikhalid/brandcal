@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { AppDataProvider } from "@/components/app-data"
 import { AppSidebar } from "@/components/app-sidebar"
 import { DevBanner } from "@/components/dev-banner"
+import { NoticeProvider } from "@/components/notice"
 import { PostPanel } from "@/components/post-panel"
 import { Shortcuts } from "@/components/shortcuts"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -39,6 +40,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const wide = isCurrent("/", pathname) || isCurrent("/posts/", pathname)
   return (
     <AppDataProvider>
+      <NoticeProvider>
       <TooltipProvider delay={300}>
         <a
           href="#main"
@@ -72,6 +74,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
           <PostPanel />
         </SidebarProvider>
       </TooltipProvider>
+      </NoticeProvider>
     </AppDataProvider>
   )
 }
