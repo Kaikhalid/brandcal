@@ -126,6 +126,18 @@ class ErrorCode(StrEnum):
     EXTRA_NOT_INSTALLED = "EXTRA_NOT_INSTALLED"
     """An optional extra this feature needs (cryptography for Access JWTs) is not installed."""
 
+    SECRET_UNAVAILABLE = "SECRET_UNAVAILABLE"
+    """A relay secret file is missing, unreadable or empty, or the token file is malformed."""
+
+    CONNECTOR_REFUSED = "CONNECTOR_REFUSED"
+    """The relay refused the connector's credentials (HTTP 401 or 403, or close 4003)."""
+
+    CONNECTOR_REPLACED = "CONNECTOR_REPLACED"
+    """A newer connector took over the relay (close 4001), so this one stopped."""
+
+    PROTOCOL_MISMATCH = "PROTOCOL_MISMATCH"
+    """The relay does not speak protocol v1 (close 4002); update brandcal or the Worker."""
+
     INTERNAL = "INTERNAL"
     """An unexpected fault in `brandcal serve`; the reply carries no detail (HTTP 500)."""
 
@@ -164,6 +176,10 @@ EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.BAD_ORIGIN: ExitCode.NOT_ALLOWED,
     ErrorCode.REASON_REQUIRED: ExitCode.VALIDATION,
     ErrorCode.EXTRA_NOT_INSTALLED: ExitCode.USAGE,
+    ErrorCode.SECRET_UNAVAILABLE: ExitCode.USAGE,
+    ErrorCode.CONNECTOR_REFUSED: ExitCode.NOT_ALLOWED,
+    ErrorCode.CONNECTOR_REPLACED: ExitCode.CONFLICT,
+    ErrorCode.PROTOCOL_MISMATCH: ExitCode.USAGE,
     ErrorCode.INTERNAL: ExitCode.INTERNAL,  # exit 1 stays reserved for a crash; HTTP status is 500
 }
 """Exit code for each error code. TODO: add the remaining codes as commands land."""
