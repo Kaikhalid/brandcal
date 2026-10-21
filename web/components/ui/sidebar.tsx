@@ -45,6 +45,19 @@ function subscribeSaved(onChange: () => void) {
   return () => window.removeEventListener("storage", onChange)
 }
 
+// With no saved choice, a viewport of 768 to 1179 px starts as the rail: the open sidebar would
+// leave a 512 px calendar at 768 (HIG sidebars: hide and reveal when the window resizes). A saved
+// choice always wins. The static HTML and the first client render stay "open" (no mismatch).
+const AUTO_RAIL = "(min-width: 768px) and (max-width: 1179.98px)"
+
+function subscribeAutoRail(onChange: () => void) {
+  const list = window.matchMedia(AUTO_RAIL)
+  list.addEventListener("change", onChange)
+  return () => list.removeEventListener("change", onChange)
+}
+
+const readAutoRail = () => window.matchMedia(AUTO_RAIL).matches
+
 type SidebarContextProps = {
   state: "expanded" | "collapsed"
   open: boolean
@@ -88,7 +101,11 @@ function SidebarProvider({
   // this tab wins over it from then on.
   const saved = React.useSyncExternalStore(subscribeSaved, readSaved, () => null)
   const [_open, _setOpen] = React.useState<boolean | null>(null)
-  const open = openProp ?? _open ?? (saved === "collapsed" ? false : defaultOpen)
+  const autoRail = React.useSyncExternalStore(subscribeAutoRail, readAutoRail, () => false)
+  const open =
+    openProp ??
+    _open ??
+    (saved === "collapsed" ? false : saved === "open" ? true : autoRail ? false : defaultOpen)
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
       const openState = typeof value === "function" ? value(open) : value
@@ -221,7 +238,7 @@ function Sidebar({
       <div
         data-slot="sidebar-gap"
         className={cn(
-          "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
+          "relative w-(--sidebar-width) bg-transparent transition-[width] duration-300 ease-(--ease-out)",
           "group-data-[collapsible=offcanvas]:w-0",
           "group-data-[side=right]:rotate-180",
           variant === "floating" || variant === "inset"
@@ -233,7 +250,7 @@ function Sidebar({
         data-slot="sidebar-container"
         data-side={side}
         className={cn(
-          "fixed top-(--shell-top) bottom-0 z-10 hidden w-(--sidebar-width) transition-[left,right,width] duration-200 ease-out data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex",
+          "fixed top-(--shell-top) bottom-0 z-10 hidden w-(--sidebar-width) transition-[left,right,width] duration-300 ease-(--ease-out) data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex",
           // Adjust the padding for floating and inset variants.
           variant === "floating" || variant === "inset"
             ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
@@ -478,7 +495,7 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 }
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button group/menu-button flex w-full items-center gap-3 overflow-hidden rounded-full px-3 text-left text-sm transition-[background-color,color,scale] duration-150 ease-out group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:scale-[0.96] disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-active:bg-pill data-active:text-pill-foreground data-active:hover:bg-pill data-active:hover:text-pill-foreground [&_svg]:size-5 [&_svg]:shrink-0 [&>span:last-child]:truncate",
+  "peer/menu-button group/menu-button flex w-full items-center gap-3 overflow-hidden rounded-full px-3 text-left text-sm transition-[background-color,color,scale] duration-150 ease-out group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:scale-[0.96] disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-active:bg-pill data-active:text-pill-foreground data-active:hover:bg-pill data-active:hover:text-pill-foreground [&_svg]:size-5 [&_svg]:shrink-0 [&>span:last-child]:truncate",
   {
     variants: {
       variant: {
