@@ -146,8 +146,11 @@ function PopoverBody({ hide }: { hide: FilterGroup[] }) {
  *  every choice is URL state, so a filtered view can be shared. Below 1100 px of content width
  *  (a container query on the shell) the button is an icon with a count dot. */
 export function FiltersPopover({ hide = [] }: { hide?: FilterGroup[] }) {
-  const { schema, activeCount } = useFilterState()
+  const { schema, filters, activeCount: all } = useFilterState()
   if (!schema) return null
+  // A half the page replaces (the lanes) is counted by that page, not here.
+  const activeCount =
+    all - (hide.includes("platform") ? filters.platform.length : 0) - (hide.includes("status") ? filters.status.length : 0)
   return (
     <Popover>
       <PopoverTrigger

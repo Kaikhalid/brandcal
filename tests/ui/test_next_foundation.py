@@ -271,10 +271,12 @@ def test_active_filters_show_as_chips_with_a_clear_button_and_live_in_the_url(
         strip = page.locator("[data-filter-strip]")
         assert strip.locator("[data-filter-chip]").count() == 0
         assert strip.get_by_role("button", name="Clear filters").count() == 0
-        page.locator("[data-filters-toggle]").click()
-        # The URL is the state, so a box ticks a moment after the click: click, then expect.
-        page.locator('[data-filter="platform:linkedin"]').click()
+        # C: the channel is chosen on the lane label, so the popover has no Platform half.
+        page.locator('[data-lane-toggle="linkedin"]').click()
         page.wait_for_url(re.compile("platform=linkedin"))
+        page.locator("[data-filters-toggle]").click()
+        assert page.locator('[data-filter="platform:linkedin"]').count() == 0
+        # The URL is the state, so a box ticks a moment after the click: click, then expect.
         page.locator('[data-filter="status:pending_approval"]').click()
         page.wait_for_url(re.compile("status=pending_approval"))
         assert "status=pending_approval" in page.url
@@ -282,8 +284,9 @@ def test_active_filters_show_as_chips_with_a_clear_button_and_live_in_the_url(
         page.locator("[data-slot=popover-content]").wait_for(state="detached", timeout=5_000)
         chips = strip.locator("[data-filter-chip]")
         expect(chips).to_have_count(2)
-        expect(page.locator("[data-filters-toggle]")).to_contain_text("(2)")
-        assert "2 filters applied" in strip.locator("[role=status]").inner_text()
+        # The lane chip is the channel; Filters (n) and the live count are the other half.
+        expect(page.locator("[data-filters-toggle]")).to_contain_text("(1)")
+        assert "1 filter applied" in strip.locator("[role=status]").inner_text()
         # One chip removes one filter.
         strip.get_by_role("button", name="Remove filter: LinkedIn").click()
         expect(chips).to_have_count(1)
@@ -404,8 +407,8 @@ def test_opening_the_panel_at_1440_switches_to_day_bands_with_no_sideways_scroll
 ) -> None:
     page = week(browser, site)
     try:
-        columns = page.locator("[aria-label='Week calendar'] .hour-grid")
-        assert columns.count() >= 7, "columns expected"
+        columns = page.locator("[aria-label='Week calendar'][data-lane-grid]")
+        assert columns.count() == 1, "lanes expected"
         pid = page.evaluate(
             "async () => (await (await fetch('/api/posts?closed=1')).json()).posts.find((p) => p.title === 'Spring launch thread').id"
         )
@@ -421,7 +424,7 @@ def test_opening_the_panel_at_1440_switches_to_day_bands_with_no_sideways_scroll
         page.get_by_role("button", name="Close panel").click()
         page.locator(PANEL).wait_for(state="detached")
         page.wait_for_timeout(300)
-        assert page.locator("[aria-label='Week calendar'] .hour-grid").count() >= 7
+        assert page.locator("[aria-label='Week calendar'][data-lane-grid]").count() == 1
     finally:
         page.context.close()
 

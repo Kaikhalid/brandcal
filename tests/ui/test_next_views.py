@@ -117,19 +117,55 @@ def test_panel_loads_clean_in_both_themes(browser: Any, site: tuple[str, str], s
         page.context.close()
 
 
-def test_the_week_places_a_post_on_its_day_and_hour(browser: Any, site: tuple[str, str]) -> None:
+def test_the_week_places_a_post_in_its_channel_lane_and_day_column(
+    browser: Any, site: tuple[str, str]
+) -> None:
     page, _ = load(browser, site, "calendar-week", "light")
     try:
         pid = post_id(page, "Planning day at Example Co")  # Tuesday, 10:00 to 11:00
         block = page.locator(f'button[data-post-id="{pid}"]')
         assert block.get_attribute("data-day") == TUESDAY
         assert block.get_attribute("data-start") == "10:00"
-        column = page.locator(f'section[data-day="{TUESDAY}"]')
-        offset = block.bounding_box()["y"] - column.bounding_box()["y"]  # type: ignore[index]
-        assert abs(offset - 10 * 144) <= 3, offset  # 9rem per hour
-        assert "10:00 to 11:00" in block.inner_text()
+        platform = block.locator("[data-platform]").get_attribute("data-platform")
+        # The card sits in the cell of its own lane and day: right row, right column.
+        cell = page.locator(f'[data-lane="{platform}"] [role=cell][data-day="{TUESDAY}"]')
+        assert cell.locator(f'button[data-post-id="{pid}"]').count() == 1
+        head = page.locator(f'[role=columnheader][data-day="{TUESDAY}"]').bounding_box()
+        box = block.bounding_box()
+        assert head and box and head["x"] - 1 <= box["x"] <= head["x"] + head["width"], (head, box)
+        # The card shows the start; its title carries the whole window with the zone offset.
+        title = block.get_attribute("title") or ""
+        assert "T10:00:00+01:00" in title and "T11:00:00+01:00" in title, title
         heading = page.get_by_role("heading", level=1).inner_text()
         assert "9 – 15 March 2026" in heading
+    finally:
+        page.context.close()
+
+
+def test_a_lane_label_filters_to_its_channel_and_the_strip_offers_show_all(
+    browser: Any, site: tuple[str, str]
+) -> None:
+    page, _ = load(browser, site, "calendar-week", "light")
+    try:
+        before = page.locator("[data-post-id]").count()
+        toggle = page.locator('[data-lane-toggle="linkedin"]')
+        assert toggle.get_attribute("aria-pressed") == "false"
+        toggle.click()
+        page.wait_for_url(re.compile("platform=linkedin"))
+        expect(toggle).to_have_attribute("aria-pressed", "true")
+        platforms = page.locator("[data-post-id] [data-platform]").evaluate_all(
+            "els => [...new Set(els.map(e => e.dataset.platform))]"
+        )
+        assert platforms == ["linkedin"], platforms
+        assert page.locator("[data-post-id]").count() < before
+        # The other lanes fold to one line and keep their label buttons.
+        assert page.locator("[data-lane][data-folded]").count() >= 1
+        assert page.locator('[data-lane-toggle="x"]').count() == 1
+        strip = page.locator("[data-filter-strip]")
+        assert "Showing:" in strip.inner_text()
+        strip.locator("[data-show-all-lanes]").click()
+        expect(page.locator("[data-post-id]")).to_have_count(before)
+        assert "platform=" not in page.url
     finally:
         page.context.close()
 
@@ -154,7 +190,9 @@ def test_the_month_view_shows_posts_and_the_week_navigates(
 def test_a_platform_checkbox_in_the_filters_popover_sets_the_url(
     browser: Any, site: tuple[str, str]
 ) -> None:
-    page, _ = load(browser, site, "calendar-week", "light")
+    # The week's lanes replace the platform half of the popover (see the lane test above); the
+    # month has no lanes, so there the popover keeps it.
+    page, _ = load(browser, site, "calendar-month", "light")
     try:
         page.locator("[data-filters-toggle]").click()
         box = page.locator('[data-filter="platform:linkedin"]')
@@ -369,7 +407,7 @@ def test_the_views_fit_small_screens(
         if view.startswith("calendar") and size is PHONE:
             assert page.locator("h3[aria-current=date], section[data-day] h3").count() >= 1
             # Day bands, not columns: the region holds sections, never an hour grid.
-            assert page.locator("[aria-label='Week calendar'] .hour-grid").count() == 0
+            assert page.locator("[aria-label='Week calendar'][data-lane-grid]").count() == 0
         # No page-wide sideways scroll; only the grid or table scrolls itself.
         offenders = page.evaluate(
             "[...document.querySelectorAll('body *')].filter(e => !e.closest('[role=region]')"

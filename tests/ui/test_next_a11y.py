@@ -49,9 +49,9 @@ from test_next_writes import (  # noqa: E402, F401
 pytestmark = pytest.mark.skipif(not axe_available(), reason="web/node_modules/axe-core is missing")
 
 PANEL = "aside[data-post-panel]"
-# The week grid is the one two-dimensional scroller; the Posts table is a data table, which WCAG
-# 1.4.10 exempts (the page itself never scrolls sideways).
-ALLOWED_SCROLL = {"Week calendar", "Posts"}
+# The lanes and the month fit their box (nothing scrolls sideways); the Posts table is a data
+# table, which WCAG 1.4.10 exempts (the page itself never scrolls sideways).
+ALLOWED_SCROLL = {"Posts"}
 SPRING = "Spring launch thread"
 
 
@@ -636,28 +636,20 @@ def test_every_target_is_24_px_or_has_the_spacing_exception(
 # -- the now line and the notice -------------------------------------------------------------
 
 
-def test_the_now_line_sits_on_the_right_day_and_hour_and_is_hidden_from_assistive_tech(
+def test_today_is_marked_on_its_own_day_column_by_shape_and_by_word_not_by_colour_alone(
     browser: Any, site: tuple[str, str]
 ) -> None:
+    # The lanes have no hour axis, so there is no now line: today's column header carries the
+    # mark (aria-current, the ink circle, and the word "Today", read even where it is not drawn).
     page, _ = new_clock_page(browser, site, dt.datetime.fromisoformat(f"{TUESDAY}T10:30:00+01:00"))
     try:
         page.goto(f"{site[0]}/?view=week&date={DATE}")
         wait_drawn(page, "[data-post-id]")
-        line = page.locator("[data-now]")
-        expect(line).to_have_count(1)
-        assert line.get_attribute("aria-hidden") == "true"
-        assert line.get_attribute("data-now") == "10:30"
-        day = page.locator(f"section[data-day='{TUESDAY}']")
-        assert day.locator("[data-now]").count() == 1  # on Tuesday, not on another day
-        assert page.locator("[data-now]").count() == 1
-        label = day.locator(".sr-only", has_text="Now: 10:30")  # visually hidden, still read
-        expect(label).to_have_count(1)
-        hour = page.evaluate(
-            "(() => { const l = document.querySelector('[data-now]');"
-            " const d = l.closest('section'); const px = d.getBoundingClientRect().height / 24;"
-            " return (l.getBoundingClientRect().top - d.getBoundingClientRect().top) / px; })()"
-        )
-        assert abs(hour - 10.5) < 0.05, hour
+        today = page.locator("[data-lane-grid] [role=columnheader][aria-current=date]")
+        expect(today).to_have_count(1)
+        assert today.get_attribute("data-day") == TUESDAY
+        assert "Today" in today.inner_text()
+        assert page.locator("[data-now]").count() == 0
     finally:
         page.context.close()
 
