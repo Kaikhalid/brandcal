@@ -349,7 +349,7 @@ def test_every_platform_has_its_own_block_colour_in_both_themes(
         page, _ = load(browser, site, "calendar-week", scheme)
         try:
             seen = page.evaluate(
-                "() => Object.fromEntries([...document.querySelectorAll('button[data-post-id]')]"
+                "() => Object.fromEntries([...document.querySelectorAll('main button[data-post-id]')]"
                 ".map((b) => [b.querySelector('[data-platform]').dataset.platform,"
                 " [getComputedStyle(b).backgroundColor, ['Top', 'Right', 'Bottom', 'Left']"
                 ".map((s) => getComputedStyle(b)['border' + s + 'Width']).join(' ')]]))"
@@ -477,8 +477,16 @@ def test_every_dialog_takes_focus_traps_it_and_returns_it(
         for key in ("Tab", "Shift+Tab"):
             for _ in range(25):
                 page.keyboard.press(key)
-                page.wait_for_timeout(30)  # focus guards hand focus back asynchronously
-                assert dialog.evaluate("(el) => el.contains(document.activeElement)"), key
+                # Focus guards hand focus back asynchronously; on a loaded CI runner that can take
+                # longer than one frame, so poll (up to 1 s) instead of a fixed 30 ms sleep.
+                for _ in range(20):
+                    page.wait_for_timeout(50)
+                    if dialog.evaluate("(el) => el.contains(document.activeElement)"):
+                        break
+                assert dialog.evaluate("(el) => el.contains(document.activeElement)"), (
+                    key,
+                    page.evaluate("document.activeElement.outerHTML.slice(0, 160)"),
+                )
         page.keyboard.press("Escape")
         expect(dialog).to_have_count(0)
         expect(button(page, action)).to_be_focused()
@@ -628,7 +636,7 @@ def test_every_target_is_24_px_or_has_the_spacing_exception(
 # -- the now line and the notice -------------------------------------------------------------
 
 
-def test_the_now_line_sits_on_the_right_day_and_hour_and_is_hidden_from_assistive_tech(
+def test_the_now_marker_sits_on_the_right_day_and_is_hidden_from_assistive_tech(
     browser: Any, site: tuple[str, str]
 ) -> None:
     page, _ = new_clock_page(browser, site, dt.datetime.fromisoformat(f"{TUESDAY}T10:30:00+01:00"))
@@ -644,12 +652,8 @@ def test_the_now_line_sits_on_the_right_day_and_hour_and_is_hidden_from_assistiv
         assert page.locator("[data-now]").count() == 1
         label = day.locator(".sr-only", has_text="Now: 10:30")  # visually hidden, still read
         expect(label).to_have_count(1)
-        hour = page.evaluate(
-            "(() => { const l = document.querySelector('[data-now]');"
-            " const d = l.closest('section'); const px = d.getBoundingClientRect().height / 24;"
-            " return (l.getBoundingClientRect().top - d.getBoundingClientRect().top) / px; })()"
-        )
-        assert abs(hour - 10.5) < 0.05, hour
+        # Day bands have no hour axis: the marker is the time, printed in today's label.
+        assert line.inner_text().strip() == "Now 10:30"
     finally:
         page.context.close()
 

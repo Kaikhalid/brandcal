@@ -23,3 +23,24 @@ export async function loadNeedsYou(
 }
 
 export const needsTotal = (groups: NeedsGroup[]) => groups.reduce((n, g) => n + g.posts.length, 0)
+
+// The queue reads most urgent first: what slipped, what was sent back, what waits for a decision.
+const URGENCY = ["missed", "changes_requested", "pending_approval"]
+const rank = (status: string) => {
+  const at = URGENCY.indexOf(status)
+  return at < 0 ? URGENCY.length : at
+}
+
+/** The groups most urgent first; a status this list does not know keeps its place at the end. */
+export const byUrgency = (groups: NeedsGroup[]): NeedsGroup[] =>
+  [...groups].sort((a, b) => rank(a.status) - rank(b.status))
+
+export const queuePosts = (groups: NeedsGroup[]): PostRow[] => groups.flatMap((g) => g.posts)
+
+/** The post to show once `id` has been decided: the one after it in the queue, else the one before
+ *  it, else null (all clear). Undefined when `id` is not in the queue at all, so nothing advances. */
+export function afterDecision(queue: PostRow[], id: string): string | null | undefined {
+  const at = queue.findIndex((p) => p.id === id)
+  if (at < 0) return undefined
+  return queue[at + 1]?.id ?? queue[at - 1]?.id ?? null
+}

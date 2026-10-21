@@ -68,10 +68,32 @@ export function statusLabel(status: string, role?: string | null): string {
 /** The five styles of UI_STYLE, for galleries. */
 export const STATUS_STYLES = ["draft", "awaiting", "scheduled", "published", "failed"] as const
 
-function StatusChip({ status, className }: { status: string; className?: string }) {
+function StatusChip({
+  status,
+  className,
+  iconOnly,
+}: {
+  status: string
+  className?: string
+  /** For a cell too narrow for the word (the month map): the icon in its fill, the word kept for
+   *  readers and in the tooltip. */
+  iconOnly?: boolean
+}) {
   const { session } = useAppData()
   const { Icon, tone } = lookFor(status)
   const label = statusLabel(status, session.state === "ok" ? session.data.role : null)
+  if (iconOnly) {
+    return (
+      <span
+        data-status={status}
+        title={label}
+        className={cn("inline-flex size-6 shrink-0 items-center justify-center rounded-full", tone, className)}
+      >
+        <Icon aria-hidden="true" strokeWidth={1.5} className="size-4" />
+        <span className="sr-only">{label}</span>
+      </span>
+    )
+  }
   return (
     <span
       data-status={status}

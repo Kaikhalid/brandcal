@@ -111,7 +111,7 @@ def test_panel_loads_clean_in_both_themes(browser: Any, site: tuple[str, str], s
         panel = page.get_by_role("complementary", name="Spring launch thread")
         assert panel.is_visible()
         text = panel.inner_text()
-        for needle in ("Part 1 of 3", "/ 280 characters", "Agent equivalent (CLI)", "Audit trail"):
+        for needle in ("Part 1 of 3", "/ 280 characters", "Agent equivalents (CLI)", "Audit trail"):
             assert needle in text, needle
     finally:
         page.context.close()
@@ -121,13 +121,13 @@ def test_the_week_places_a_post_on_its_day_and_hour(browser: Any, site: tuple[st
     page, _ = load(browser, site, "calendar-week", "light")
     try:
         pid = post_id(page, "Planning day at Example Co")  # Tuesday, 10:00 to 11:00
-        block = page.locator(f'button[data-post-id="{pid}"]')
+        block = page.locator(f'main button[data-post-id="{pid}"]')
         assert block.get_attribute("data-day") == TUESDAY
         assert block.get_attribute("data-start") == "10:00"
-        column = page.locator(f'section[data-day="{TUESDAY}"]')
-        offset = block.bounding_box()["y"] - column.bounding_box()["y"]  # type: ignore[index]
-        assert abs(offset - 10 * 144) <= 3, offset  # 9rem per hour
-        assert "10:00 to 11:00" in block.inner_text()
+        # Day bands: the post sits in its day's band (no hour axis), with its window readable.
+        band = page.locator(f'section[data-day="{TUESDAY}"]')
+        assert band.locator(f'button[data-post-id="{pid}"]').count() == 1
+        assert re.search(r"10:00\s+to 11:00", block.inner_text())
         heading = page.get_by_role("heading", level=1).inner_text()
         assert "9 – 15 March 2026" in heading
     finally:
@@ -151,28 +151,31 @@ def test_the_month_view_shows_posts_and_the_week_navigates(
         page.context.close()
 
 
-def test_a_filter_pill_sets_the_url_and_aria_pressed(browser: Any, site: tuple[str, str]) -> None:
+def test_a_platform_checkbox_in_the_filters_popover_sets_the_url(
+    browser: Any, site: tuple[str, str]
+) -> None:
     page, _ = load(browser, site, "calendar-week", "light")
     try:
-        pill = page.locator('[data-filter="platform:linkedin"]')
-        before = page.locator("[data-post-id]").count()
-        assert pill.get_attribute("aria-pressed") == "false"
-        pill.click()
+        page.locator("[data-filters-toggle]").click()
+        box = page.locator('[data-filter="platform:linkedin"]')
+        cards = page.locator("main [data-post-id]")  # the calendar's, not the rail's queue rows
+        before = cards.count()
+        assert not box.is_checked()
+        box.click()  # the URL is the state, so the box ticks a moment after the click
         page.wait_for_url(re.compile("platform=linkedin"))
-        expect(pill).to_have_attribute("aria-pressed", "true")
-        expect(page.locator("[data-post-id]")).not_to_have_count(before)
-        platforms = page.locator("[data-post-id] [data-platform]").evaluate_all(
+        expect(box).to_be_checked()
+        expect(cards).not_to_have_count(before)
+        platforms = page.locator("main [data-post-id] [data-platform]").evaluate_all(
             "els => [...new Set(els.map(e => e.dataset.platform))]"
         )
         assert platforms == ["linkedin"], platforms
-        assert page.locator("[data-post-id]").count() < before
-        pill.click()
-        expect(pill).to_have_attribute("aria-pressed", "false")
+        assert cards.count() < before
+        box.click()
+        expect(box).not_to_be_checked()
         assert "platform=" not in page.url
-        page.get_by_role("button", name="More filters").click()
         page.get_by_label("Search by slug").fill("launch-thread")
         page.wait_for_url(re.compile("q=launch-thread"))
-        expect(page.locator("[data-post-id]")).to_have_count(1)
+        expect(cards).to_have_count(1)
     finally:
         page.context.close()
 
@@ -202,15 +205,16 @@ def test_from_1200px_the_panel_sits_beside_the_content(browser: Any, site: tuple
     page, _ = load(browser, site, "calendar-week", "light")
     try:
         pid = post_id(page, "Spring launch thread")
-        page.locator(f'button[data-post-id="{pid}"]').click()
-        until(page, "document.querySelector('aside')?.contains(document.activeElement)")
+        page.locator(f'main button[data-post-id="{pid}"]').click()
+        until(page, "document.querySelector('[data-post-panel]')?.contains(document.activeElement)")
         assert page.evaluate("document.getElementById('shell-body').inert") is False
         main = page.get_by_role("main").bounding_box()
-        panel = page.locator("aside").bounding_box()
+        panel = page.locator("[data-post-panel]").bounding_box()
         assert main and panel and main["x"] + main["width"] <= panel["x"] + 1
-        page.get_by_role("button", name="Close panel").click()
-        page.locator("aside").wait_for(state="detached")
-        assert page.evaluate("document.activeElement.dataset.postId") == pid
+        # The rail goes back to the Needs you queue; focus returns to the card that opened the post.
+        page.get_by_role("button", name=re.compile("^Back to Needs you")).click()
+        page.locator("[data-post-panel]").wait_for(state="detached")
+        until(page, f"document.activeElement?.dataset.postId === '{pid}'")
     finally:
         page.context.close()
 
@@ -236,7 +240,10 @@ def test_the_panel_diffs_two_versions_with_signs_and_shows_media(
     page, _ = load(browser, site, "calendar-week", "light")
     try:
         pid = post_id(page, "Planning day at Example Co")
-        page.locator(f'button[data-post-id="{pid}"]').click()
+        page.locator(f'main button[data-post-id="{pid}"]').click()
+        # History, Compare and the CLI lines are disclosures, closed on open.
+        page.locator("aside").get_by_role("button", name="Compare versions").click()
+        page.locator("aside").get_by_role("button", name="Agent equivalents (CLI)").click()
         diff = page.locator("aside [data-diff]")
         diff.wait_for()
         added = diff.locator("[data-sign=add]")
@@ -248,7 +255,8 @@ def test_the_panel_diffs_two_versions_with_signs_and_shows_media(
         assert image.get_attribute("alt", timeout=5_000)
         assert "Alt text:" in page.locator("aside figure figcaption").inner_text()
         page.get_by_role("button", name=re.compile("^Fingerprint")).click()
-        expect(page.locator("aside [role=status]").first).to_contain_text(re.compile("Cop|copy"))
+        said = page.locator("aside [role=status]").filter(has_text=re.compile("Copied|copy"))
+        expect(said).to_have_count(1)
         wanted = page.evaluate(
             "async id => { const p = await (await fetch('/api/posts/' + id)).json();"
             " return [...p.actions, p.note].filter(Boolean).map(a => [a.id, a.cli]); }",
@@ -256,7 +264,7 @@ def test_the_panel_diffs_two_versions_with_signs_and_shows_media(
         )
         assert len(wanted) >= 3
         for action, cli in wanted:  # each action: a button (N3) and its exact CLI line
-            assert page.locator(f'aside [data-action="{action}"] code').inner_text() == cli
+            assert page.locator(f'aside [data-cli-for="{action}"] code').inner_text() == cli
             assert page.locator(f'aside [data-action-button="{action}"]').count() == 1
     finally:
         page.context.close()
@@ -361,7 +369,8 @@ def test_the_views_fit_small_screens(
         assert not problems, problems
         if view.startswith("calendar") and size is PHONE:
             assert page.locator("h3[aria-current=date], section[data-day] h3").count() >= 1
-            assert page.locator("[role=region][aria-label='Week calendar']").count() == 0
+            # Day bands, not columns: the region holds sections, never an hour grid.
+            assert page.locator("[aria-label='Week calendar'] .hour-grid").count() == 0
         # No page-wide sideways scroll; only the grid or table scrolls itself.
         offenders = page.evaluate(
             "[...document.querySelectorAll('body *')].filter(e => !e.closest('[role=region]')"

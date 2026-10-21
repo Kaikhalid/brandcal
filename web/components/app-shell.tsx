@@ -6,10 +6,12 @@ import { usePathname } from "next/navigation"
 import { AppDataProvider } from "@/components/app-data"
 import { AppSidebar } from "@/components/app-sidebar"
 import { DevBanner } from "@/components/dev-banner"
+import { NeedsQueueProvider } from "@/components/needs-queue"
 import { NoticeProvider } from "@/components/notice"
 import { PostPanel } from "@/components/post-panel"
 import { Shortcuts } from "@/components/shortcuts"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { ToolbarProvider, ToolbarSlot } from "@/components/toolbar"
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { isCurrent } from "@/lib/nav"
@@ -32,19 +34,24 @@ function ShellTrigger() {
   )
 }
 
-// The shell: skip link, dev banner, glass sidebar (a sheet on a phone), a frosted bar that sticks
-// to the top of the content, and <main>. Landmarks: one banner (the bar), one nav, one main.
+// The shell: skip link, dev banner, glass sidebar (a sheet on a phone), one glass bar that is also
+// the page toolbar (see toolbar.tsx), and <main>. Landmarks: one banner (the bar), one nav, one
+// main. On the calendar the column is exactly one screen tall and <main> is a flex column, so the
+// calendar is the only scroller; every other page scrolls as a page.
 function AppShell({ children }: { children: React.ReactNode }) {
   // The calendar and the posts table need the width; the rest read better narrow.
   const pathname = usePathname()
-  const wide = isCurrent("/", pathname) || isCurrent("/posts/", pathname)
+  const fill = isCurrent("/", pathname)
+  const wide = fill || isCurrent("/posts/", pathname)
   return (
     <AppDataProvider>
       <NoticeProvider>
+      <NeedsQueueProvider>
       <TooltipProvider delay={300}>
         <DevBanner />
         <SidebarProvider>
           <Shortcuts />
+          <ToolbarProvider>
           {/* Inert while the post panel overlays the page (below 1200px); see post-panel.tsx. The
               skip link lives inside it so a modal panel cannot be left by Tab. */}
           <div id="shell-body" className="contents">
@@ -55,18 +62,30 @@ function AppShell({ children }: { children: React.ReactNode }) {
               Skip to main content
             </a>
             <AppSidebar />
-            <div className="flex min-w-0 flex-1 flex-col">
-              <header className="glass sticky top-(--shell-top) z-20 flex h-16 items-center justify-between gap-3 px-4 md:px-6">
+            {/* @container: the bar's controls collapse to icons by the width of this column. */}
+            <div
+              className={cn(
+                "@container flex min-w-0 flex-1 flex-col",
+                fill && "h-[calc(100svh-var(--shell-top))] overflow-hidden"
+              )}
+            >
+              <header className="glass sticky top-(--shell-top) z-20 flex min-h-16 shrink-0 flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3 md:px-6">
                 <ShellTrigger />
-                <ThemeToggle />
+                <ToolbarSlot />
+                <ThemeToggle className="ml-auto" />
               </header>
               <main
                 id="main"
                 tabIndex={-1}
                 className={cn(
-                  // pb-32 leaves room to scroll the last controls clear of the notice card.
-                  "mx-auto w-full flex-1 px-6 pt-10 pb-32 outline-none md:pt-14",
-                  wide ? "max-w-[88rem]" : "max-w-5xl"
+                  "w-full outline-none",
+                  fill
+                    ? "flex min-h-0 flex-1 flex-col"
+                    : cn(
+                        // pb-32 leaves room to scroll the last controls clear of the notice card.
+                        "mx-auto flex-1 px-6 pt-10 pb-32 md:pt-14",
+                        wide ? "max-w-[88rem]" : "max-w-5xl"
+                      )
                 )}
               >
                 {children}
@@ -74,8 +93,10 @@ function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <PostPanel />
+          </ToolbarProvider>
         </SidebarProvider>
       </TooltipProvider>
+      </NeedsQueueProvider>
       </NoticeProvider>
     </AppDataProvider>
   )

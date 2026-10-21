@@ -277,7 +277,10 @@ def test_the_cli_line_has_a_copy_button_that_says_copied(
 ) -> None:
     page, problems = open_post(browser, site, new_post(home, "copy", "Copy check"))
     page.context.grant_permissions(["clipboard-read", "clipboard-write"])
-    row = page.locator('aside[data-post-panel] li[data-action="approve"]')
+    page.locator("aside[data-post-panel]").get_by_role(
+        "button", name="Agent equivalents (CLI)"
+    ).click()
+    row = page.locator('aside[data-post-panel] li[data-cli-for="approve"]')
     row.get_by_role("button", name="Copy the Approve command").click()
     expect(row.locator("[role=status]")).to_have_text("Copied")
     assert page.evaluate("navigator.clipboard.readText()").startswith("brandcal approve")
@@ -298,10 +301,9 @@ def test_approve_sends_and_the_panel_moves_on(browser: Any, site: tuple[str, str
     done(page, dialog, "Approve: done. How we plan a launch is now Approved, version 1.")
     recorded(site, pid, before)
     assert api(site, f"/api/posts/{pid}")["status"] == "approved"
-    # The panel was reloaded: no Approve button, and the focus is on the heading that remains.
-    expect(button(page, "approve")).to_have_count(0)
+    # The inspector rail moves on to the next post in the queue; the focus is on its heading.
+    expect(page.locator("#panel-title")).not_to_have_text("How we plan a launch")
     expect(page.locator("#panel-title")).to_be_focused()
-    expect(page.locator("aside[data-post-panel]")).to_contain_text("console (verified:")
     shot(page, "next-notice-light")
     clean(page, problems)
 
@@ -384,9 +386,8 @@ def test_cancel_closes_the_post(browser: Any, site: tuple[str, str]) -> None:
     done(page, dialog, "Cancel: done. Weekend note is now Cancelled")
     recorded(site, pid, before)
     assert api(site, f"/api/posts/{pid}")["status"] == "cancelled"
-    expect(page.locator("aside[data-post-panel]")).to_contain_text(
-        "This post is closed, so there is nothing to do."
-    )
+    # The inspector rail moves on to the next post of the queue (a cancelled post leaves it).
+    expect(page.locator("#panel-title")).not_to_have_text("Weekend note")
     expect(page.locator("#panel-title")).to_be_focused()
     clean(page, problems)
 
@@ -486,15 +487,18 @@ def test_disabled_actions_stay_visible_with_their_refusal(
 ) -> None:
     pid = pid_for(site, "Partner announcement")
     page, problems = open_post(browser, site, pid)
+    page.locator("aside[data-post-panel]").get_by_role(
+        "button", name="Agent equivalents (CLI)"
+    ).click()
     for action in ("edit", "cancel"):
         b = button(page, action)
         assert b.is_disabled()
         assert b.get_attribute("aria-disabled") == "true"
-        row = page.locator(f'aside[data-post-panel] li[data-action="{action}"]')
-        text = row.inner_text()
+        text = page.locator(f'aside[data-post-panel] li[data-action-note="{action}"]').inner_text()
         assert "EDIT_WHILE_CLAIMED" in text or "CLAIMED" in text
         assert "What to do:" in text
-        assert "Agent equivalent (CLI)" in text
+        cli = page.locator(f'aside[data-post-panel] li[data-cli-for="{action}"]')
+        assert "Agent equivalent (CLI)" in cli.inner_text()
     assert button(page, "note").is_enabled()
     clean(page, problems)
 
@@ -555,7 +559,8 @@ def test_the_dev_unverified_server_refuses_every_write(
     for i in range(buttons.count()):
         assert buttons.nth(i).is_disabled()
         assert buttons.nth(i).get_attribute("aria-disabled") == "true"
-    rows = page.locator("aside[data-post-panel] li[data-action]")
+    rows = page.locator("aside[data-post-panel] li[data-action-note]")
+    assert rows.count() == buttons.count()
     for i in range(rows.count()):
         assert "IDENTITY_UNVERIFIED" in rows.nth(i).inner_text()
         assert "What to do:" in rows.nth(i).inner_text()

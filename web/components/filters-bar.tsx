@@ -18,12 +18,12 @@ export const pillClass = (active: boolean) =>
       : "border-control bg-surface text-ink hover:bg-muted"
   )
 
-const fieldClass =
+export const fieldClass =
   "h-10 w-full rounded-control border border-control bg-surface px-3 text-sm text-ink"
 
-const names = (items: unknown[]) => items.map((item) => String(item))
+export const names = (items: unknown[]) => items.map((item) => String(item))
 
-function Select({
+export function Select({
   label,
   value,
   options,

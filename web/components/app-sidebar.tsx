@@ -40,16 +40,19 @@ function NavLink({ item, count }: { item: NavItem; count: number | null }) {
         render={<Link href={item.href} prefetch={false} onClick={() => setOpenMobile(false)} />}
       >
         <Icon aria-hidden="true" strokeWidth={1.5} />
-        <span className="whitespace-nowrap">{item.label}</span>
+        {/* sr-only, not hidden, in the rail: the link keeps its name (EVALUATION 3). */}
+        <span className="whitespace-nowrap group-data-[collapsible=icon]:sr-only">{item.label}</span>
         {waiting && (
           <>
             <Badge
               variant="secondary"
+              aria-hidden="true"
               className="ml-auto tabular-nums group-data-[collapsible=icon]:hidden"
             >
               {count}
-              <span className="sr-only"> waiting</span>
             </Badge>
+            {/* Outside the badge, so the count is still read when the badge is hidden in the rail. */}
+            <span className="sr-only">{` ${count} waiting`}</span>
             <span
               aria-hidden="true"
               className="absolute top-1.5 right-1.5 hidden size-3 rounded-full border-2 border-surface bg-destructive group-data-[collapsible=icon]:block"
