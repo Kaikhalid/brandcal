@@ -1,6 +1,7 @@
 "use client"
 
 import { ChevronLeft, ChevronRight } from "lucide-react"
+import type * as React from "react"
 
 import { FiltersPopover, NeedsYouChip, type FilterGroup } from "@/components/filters-popover"
 import { pillClass } from "@/components/filters-bar"
@@ -67,6 +68,7 @@ export function CalendarToolbar({
   today,
   onView,
   hideFilters,
+  needsYou,
 }: {
   view: View
   date: string
@@ -75,6 +77,8 @@ export function CalendarToolbar({
   today: () => void
   onView: (view: View) => void
   hideFilters?: FilterGroup[]
+  /** What takes the Needs you chip's place (direction B: the rail's button); `null` for nothing. */
+  needsYou?: React.ReactNode
 }) {
   return (
     <ToolbarPortal>
@@ -83,7 +87,7 @@ export function CalendarToolbar({
       </ToolbarTitle>
       <RangeNav unit={view} inRange={inRange} step={step} today={today} />
       <ToolbarSpacer />
-      <NeedsYouChip />
+      {needsYou === undefined ? <NeedsYouChip /> : needsYou}
       <FiltersPopover hide={hideFilters} />
       <ViewSwitch view={view} onChange={onView} />
     </ToolbarPortal>

@@ -301,10 +301,9 @@ def test_approve_sends_and_the_panel_moves_on(browser: Any, site: tuple[str, str
     done(page, dialog, "Approve: done. How we plan a launch is now Approved, version 1.")
     recorded(site, pid, before)
     assert api(site, f"/api/posts/{pid}")["status"] == "approved"
-    # The panel was reloaded: no Approve button, and the focus is on the heading that remains.
-    expect(button(page, "approve")).to_have_count(0)
+    # The inspector rail moves on to the next post in the queue; the focus is on its heading.
+    expect(page.locator("#panel-title")).not_to_have_text("How we plan a launch")
     expect(page.locator("#panel-title")).to_be_focused()
-    expect(page.locator("aside[data-post-panel]")).to_contain_text("console (verified:")
     shot(page, "next-notice-light")
     clean(page, problems)
 
@@ -387,9 +386,8 @@ def test_cancel_closes_the_post(browser: Any, site: tuple[str, str]) -> None:
     done(page, dialog, "Cancel: done. Weekend note is now Cancelled")
     recorded(site, pid, before)
     assert api(site, f"/api/posts/{pid}")["status"] == "cancelled"
-    expect(page.locator("aside[data-post-panel]")).to_contain_text(
-        "This post is closed, so there is nothing to do."
-    )
+    # The inspector rail moves on to the next post of the queue (a cancelled post leaves it).
+    expect(page.locator("#panel-title")).not_to_have_text("Weekend note")
     expect(page.locator("#panel-title")).to_be_focused()
     clean(page, problems)
 

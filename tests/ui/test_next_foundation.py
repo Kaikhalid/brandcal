@@ -179,7 +179,8 @@ def test_the_calendar_has_one_bar_with_the_title_in_it_and_the_page_does_not_scr
         for name in ("Previous week", "Next week", "Today", "Week", "Month"):
             found = page.locator("header").get_by_role("button", name=name, exact=True)
             assert found.count() == 1, name
-        assert page.locator("header [data-needs-you-chip]").count() == 1
+        # Direction B: the Needs you queue is the rail beside the calendar, not a chip in the bar.
+        assert page.locator("[data-inspector-rail]").count() == 1
         assert page.locator("header [data-filters-toggle]").count() == 1
         assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")
         assert page.locator("main").get_by_role("region", name="Week calendar").count() == 1
@@ -313,9 +314,10 @@ def test_a_filtered_url_opens_with_the_chips_already_on(
 # -- Needs you ------------------------------------------------------------------------------
 
 
-def test_the_needs_you_chip_toggles_the_three_statuses_and_aria_pressed(
+def test_the_rail_queue_lists_the_three_needs_you_statuses(
     browser: Any, site: tuple[str, str]
 ) -> None:
+    # Direction B has no chip: the rail is the Needs you queue (the same rule as the sidebar badge).
     page = week(browser, site)
     try:
         wanted = page.evaluate(
@@ -323,23 +325,12 @@ def test_the_needs_you_chip_toggles_the_three_statuses_and_aria_pressed(
             " return s.needs_you.filter((x) => s.states.includes(x)); }"
         )
         assert len(wanted) == 3, wanted
-        chip = page.locator("[data-needs-you-chip]")
-        expect(chip).to_have_attribute("aria-pressed", "false")
-        assert re.search(r"Needs you\s*\d+", chip.inner_text()) or "waiting" in chip.inner_text()
-        chip.click()
-        expect(chip).to_have_attribute("aria-pressed", "true")
-        page.wait_for_url(re.compile("status="))
-        match = re.search(r"status=([^&]+)", page.url)
-        assert match, page.url
-        applied = set(match.group(1).replace("%2C", ",").split(","))
-        assert applied == set(wanted), applied
-        statuses = page.locator("[data-post-id] [data-status]").evaluate_all(
-            "els => [...new Set(els.map((e) => e.dataset.status))]"
+        page.locator("[data-inspector-rail] [data-queue-row]").first.wait_for(timeout=10_000)
+        shown = page.locator("[data-inspector-rail] section[data-status]").evaluate_all(
+            "els => els.map((e) => e.dataset.status)"
         )
-        assert set(statuses) <= set(wanted), statuses
-        chip.click()
-        expect(chip).to_have_attribute("aria-pressed", "false")
-        assert "status=" not in page.url
+        assert shown and set(shown) <= set(wanted), shown
+        assert page.locator("[data-needs-you-chip]").count() == 0
     finally:
         page.context.close()
 
@@ -404,24 +395,25 @@ def test_opening_the_panel_at_1440_switches_to_day_bands_with_no_sideways_scroll
 ) -> None:
     page = week(browser, site)
     try:
-        columns = page.locator("[aria-label='Week calendar'] .hour-grid")
-        assert columns.count() >= 7, "columns expected"
+        bands = page.locator("[aria-label='Week calendar'] > section[data-day]")
+        assert bands.count() == 7, "bands expected"
         pid = page.evaluate(
             "async () => (await (await fetch('/api/posts?closed=1')).json()).posts.find((p) => p.title === 'Spring launch thread').id"
         )
         page.locator(f"button[data-post-id='{pid}']").first.click()
         page.locator(PANEL).wait_for(timeout=5_000)
         page.wait_for_timeout(300)
-        assert columns.count() == 0, "bands expected"
+        assert bands.count() == 7, "bands expected"
         found = page.evaluate(
             "() => { const r = document.querySelector('[aria-label=\"Week calendar\"]');"
             " return { region: [r.scrollWidth, r.clientWidth], page: document.documentElement.scrollWidth, w: innerWidth }; }"
         )
         assert found["region"][0] <= found["region"][1] and found["page"] <= found["w"], found
-        page.get_by_role("button", name="Close panel").click()
+        page.get_by_role("button", name=re.compile("^Back to Needs you")).click()
         page.locator(PANEL).wait_for(state="detached")
         page.wait_for_timeout(300)
-        assert page.locator("[aria-label='Week calendar'] .hour-grid").count() >= 7
+        assert bands.count() == 7
+        assert page.locator("[data-inspector-rail='queue']").count() == 1
     finally:
         page.context.close()
 
@@ -472,10 +464,12 @@ def test_axe_finds_nothing_with_filters_applied_and_the_needs_you_chip_pressed(
 ) -> None:
     page = week(browser, site, scheme)
     try:
-        page.locator("[data-needs-you-chip]").click()
-        page.wait_for_url(re.compile("status="))
+        page.locator("[data-filters-toggle]").click()
+        page.locator('[data-filter="platform:linkedin"]').check()
+        page.keyboard.press("Escape")
+        page.wait_for_url(re.compile("platform="))
         page.wait_for_timeout(300)
-        axe_report(page, f"foundation-chip-{scheme}")
+        axe_report(page, f"foundation-filtered-{scheme}")
     finally:
         page.context.close()
 

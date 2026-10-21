@@ -349,7 +349,7 @@ def test_every_platform_has_its_own_block_colour_in_both_themes(
         page, _ = load(browser, site, "calendar-week", scheme)
         try:
             seen = page.evaluate(
-                "() => Object.fromEntries([...document.querySelectorAll('button[data-post-id]')]"
+                "() => Object.fromEntries([...document.querySelectorAll('main button[data-post-id]')]"
                 ".map((b) => [b.querySelector('[data-platform]').dataset.platform,"
                 " [getComputedStyle(b).backgroundColor, ['Top', 'Right', 'Bottom', 'Left']"
                 ".map((s) => getComputedStyle(b)['border' + s + 'Width']).join(' ')]]))"
@@ -636,7 +636,7 @@ def test_every_target_is_24_px_or_has_the_spacing_exception(
 # -- the now line and the notice -------------------------------------------------------------
 
 
-def test_the_now_line_sits_on_the_right_day_and_hour_and_is_hidden_from_assistive_tech(
+def test_the_now_marker_sits_on_the_right_day_and_is_hidden_from_assistive_tech(
     browser: Any, site: tuple[str, str]
 ) -> None:
     page, _ = new_clock_page(browser, site, dt.datetime.fromisoformat(f"{TUESDAY}T10:30:00+01:00"))
@@ -652,12 +652,8 @@ def test_the_now_line_sits_on_the_right_day_and_hour_and_is_hidden_from_assistiv
         assert page.locator("[data-now]").count() == 1
         label = day.locator(".sr-only", has_text="Now: 10:30")  # visually hidden, still read
         expect(label).to_have_count(1)
-        hour = page.evaluate(
-            "(() => { const l = document.querySelector('[data-now]');"
-            " const d = l.closest('section'); const px = d.getBoundingClientRect().height / 24;"
-            " return (l.getBoundingClientRect().top - d.getBoundingClientRect().top) / px; })()"
-        )
-        assert abs(hour - 10.5) < 0.05, hour
+        # Day bands have no hour axis: the marker is the time, printed in today's label.
+        assert line.inner_text().strip() == "Now 10:30"
     finally:
         page.context.close()
 

@@ -3,8 +3,8 @@
     "script": [
       "sha256-0JdgZII2xv8s5khfnZVA7IkOt1oVG2pF019486zJlBc=",
       "sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo=",
-      "sha256-bUqBNS3G1L6msg2nNhTJHKqMX0wJTSkWKGGP2cUIFVs=",
-      "sha256-n46vPwSWuMC0W703pBofImv82Z26xo4LXymv0E9caPk="
+      "sha256-n46vPwSWuMC0W703pBofImv82Z26xo4LXymv0E9caPk=",
+      "sha256-wn0hXUKvSDnOb2fzrU7q3NcTKGejYz25BBwRtq0S/kw="
     ],
     "style": [
       "sha256-Z5XTK23DFuEMs0PwnyZDO9SWxemQ5HxcpVaBNuUJyWY="
@@ -21,8 +21,8 @@
     "script": [
       "sha256-0JdgZII2xv8s5khfnZVA7IkOt1oVG2pF019486zJlBc=",
       "sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo=",
-      "sha256-bUqBNS3G1L6msg2nNhTJHKqMX0wJTSkWKGGP2cUIFVs=",
-      "sha256-n46vPwSWuMC0W703pBofImv82Z26xo4LXymv0E9caPk="
+      "sha256-n46vPwSWuMC0W703pBofImv82Z26xo4LXymv0E9caPk=",
+      "sha256-wn0hXUKvSDnOb2fzrU7q3NcTKGejYz25BBwRtq0S/kw="
     ],
     "style": [
       "sha256-Z5XTK23DFuEMs0PwnyZDO9SWxemQ5HxcpVaBNuUJyWY="
@@ -39,8 +39,8 @@
     "script": [
       "sha256-0JdgZII2xv8s5khfnZVA7IkOt1oVG2pF019486zJlBc=",
       "sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo=",
-      "sha256-bUqBNS3G1L6msg2nNhTJHKqMX0wJTSkWKGGP2cUIFVs=",
-      "sha256-n46vPwSWuMC0W703pBofImv82Z26xo4LXymv0E9caPk="
+      "sha256-n46vPwSWuMC0W703pBofImv82Z26xo4LXymv0E9caPk=",
+      "sha256-wn0hXUKvSDnOb2fzrU7q3NcTKGejYz25BBwRtq0S/kw="
     ],
     "style": [
       "sha256-Z5XTK23DFuEMs0PwnyZDO9SWxemQ5HxcpVaBNuUJyWY="
@@ -57,7 +57,7 @@
     "script": [
       "sha256-0JdgZII2xv8s5khfnZVA7IkOt1oVG2pF019486zJlBc=",
       "sha256-7mu4H06fwDCjmnxxr/xNHyuQC6pLTHr4M2E4jXw5WZs=",
-      "sha256-GHZueHz0y1IFqb5ZP4vBRa0d6WbPt3lbk4wEt6prXB4=",
+      "sha256-96nJrShtAukTC123FdS1IOwKa0ZTk5tmnwEQPpQEmq4=",
       "sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo=",
       "sha256-QAlSewaQLi/NPCznjAZSyvQ72heD0VdxmNDDkZeCxgc=",
       "sha256-n46vPwSWuMC0W703pBofImv82Z26xo4LXymv0E9caPk="
@@ -70,7 +70,7 @@
   "channels/index.html": {
     "script": [
       "sha256-0JdgZII2xv8s5khfnZVA7IkOt1oVG2pF019486zJlBc=",
-      "sha256-3nGqvMT5MYoQFtfk/4naqzg/sBdET6SXIakmFYUZEYg=",
+      "sha256-5Wg7V0u5FT40ALm3qrVgZIp2uCZ3Dup4OuqCiE7kC8Y=",
       "sha256-7mu4H06fwDCjmnxxr/xNHyuQC6pLTHr4M2E4jXw5WZs=",
       "sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo=",
       "sha256-QAlSewaQLi/NPCznjAZSyvQ72heD0VdxmNDDkZeCxgc=",
@@ -83,11 +83,11 @@
   },
   "index.html": {
     "script": [
-      "sha256-/B82N9+1lUBI/2ozkzPil2SB1dSuUWS+OJDmfW1RQVI=",
       "sha256-0JdgZII2xv8s5khfnZVA7IkOt1oVG2pF019486zJlBc=",
       "sha256-7mu4H06fwDCjmnxxr/xNHyuQC6pLTHr4M2E4jXw5WZs=",
       "sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo=",
       "sha256-QAlSewaQLi/NPCznjAZSyvQ72heD0VdxmNDDkZeCxgc=",
+      "sha256-Rh5pIWNIqwxX4kbzaLCPsHCWZChCTbm0bYrkHFgJarc=",
       "sha256-n46vPwSWuMC0W703pBofImv82Z26xo4LXymv0E9caPk="
     ],
     "style": [],
@@ -101,7 +101,7 @@
       "sha256-7mu4H06fwDCjmnxxr/xNHyuQC6pLTHr4M2E4jXw5WZs=",
       "sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo=",
       "sha256-QAlSewaQLi/NPCznjAZSyvQ72heD0VdxmNDDkZeCxgc=",
-      "sha256-XwKolKo/gSPWV2tclZR0sXoIBGB/HpGeeU57iVxPoC8=",
+      "sha256-WAoG13slSt3lK/gCdVdr8FYtjlxnzwpcfzDkY4ZEgsA=",
       "sha256-n46vPwSWuMC0W703pBofImv82Z26xo4LXymv0E9caPk="
     ],
     "style": [],
@@ -113,7 +113,7 @@
     "script": [
       "sha256-0JdgZII2xv8s5khfnZVA7IkOt1oVG2pF019486zJlBc=",
       "sha256-7mu4H06fwDCjmnxxr/xNHyuQC6pLTHr4M2E4jXw5WZs=",
-      "sha256-97E6petHMX8QqlI/ehQymAvP1GaXnn5bZxCqJD2Euto=",
+      "sha256-LKARPLJQuF00U6+LL2NJauA5PZ62JRkEiKqZXtflkao=",
       "sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo=",
       "sha256-QAlSewaQLi/NPCznjAZSyvQ72heD0VdxmNDDkZeCxgc=",
       "sha256-n46vPwSWuMC0W703pBofImv82Z26xo4LXymv0E9caPk="
@@ -126,8 +126,8 @@
   "settings/index.html": {
     "script": [
       "sha256-0JdgZII2xv8s5khfnZVA7IkOt1oVG2pF019486zJlBc=",
-      "sha256-4m2T/2Dp+MuSLNKrLv9yufV7RYBgimOnIRXV8LkrSX4=",
       "sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo=",
+      "sha256-hMmvAHwhLCWcAytgL0cuQWr4T+zeDdnBOLZvRhZ0xtY=",
       "sha256-n46vPwSWuMC0W703pBofImv82Z26xo4LXymv0E9caPk="
     ],
     "style": [],

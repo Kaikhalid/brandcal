@@ -86,21 +86,30 @@ export const takeOpener = () => {
 // while the panel is open, and back after), focus goes to the same post's new button once the
 // layout has settled: the calendar calls settleFocus() after it switches, and a timer covers the
 // case where nothing switches.
-let pendingFocus: string | null = null
+let pendingFocus: { id: string; scope: string } | null = null
 
-export function focusPostLater(id: string) {
-  pendingFocus = id
+/** `scope` narrows where the post's button is looked for (the inspector rail's queue row), and its
+ *  heading `#rail-title` takes the focus when the post is not in it. */
+export function focusPostLater(id: string, scope = "") {
+  pendingFocus = { id, scope }
   window.setTimeout(settleFocus, 400)
 }
 
 export function settleFocus() {
   if (pendingFocus === null) return
-  const found = document.querySelector<HTMLElement>(`button[data-post-id="${pendingFocus}"]`)
+  const { id, scope } = pendingFocus
+  const found = document.querySelector<HTMLElement>(`${scope} button[data-post-id="${id}"]`.trim())
   pendingFocus = null
-  const target = found ?? document.querySelector<HTMLElement>("h1")
+  const target =
+    found ?? (scope ? document.getElementById("rail-title") : null) ?? document.querySelector<HTMLElement>("h1")
   if (!target) return
-  if (!target.hasAttribute("tabindex") && target.tagName === "H1") target.tabIndex = -1
+  if (!target.hasAttribute("tabindex") && target.tagName !== "BUTTON") target.tabIndex = -1
   target.focus({ preventScroll: true })
+}
+
+/** Remember the control that opened a layer (the panel, the queue sheet) for focus to return to. */
+export const rememberOpener = (from: HTMLElement) => {
+  opener = from
 }
 
 /** Open a post in the side panel (`?post=ID`) from any view; `from` gets focus back on close. */

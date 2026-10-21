@@ -121,13 +121,13 @@ def test_the_week_places_a_post_on_its_day_and_hour(browser: Any, site: tuple[st
     page, _ = load(browser, site, "calendar-week", "light")
     try:
         pid = post_id(page, "Planning day at Example Co")  # Tuesday, 10:00 to 11:00
-        block = page.locator(f'button[data-post-id="{pid}"]')
+        block = page.locator(f'main button[data-post-id="{pid}"]')
         assert block.get_attribute("data-day") == TUESDAY
         assert block.get_attribute("data-start") == "10:00"
-        column = page.locator(f'section[data-day="{TUESDAY}"]')
-        offset = block.bounding_box()["y"] - column.bounding_box()["y"]  # type: ignore[index]
-        assert abs(offset - 10 * 144) <= 3, offset  # 9rem per hour
-        assert "10:00 to 11:00" in block.inner_text()
+        # Day bands: the post sits in its day's band (no hour axis), with its window readable.
+        band = page.locator(f'section[data-day="{TUESDAY}"]')
+        assert band.locator(f'button[data-post-id="{pid}"]').count() == 1
+        assert re.search(r"10:00\s+to 11:00", block.inner_text())
         heading = page.get_by_role("heading", level=1).inner_text()
         assert "9 – 15 March 2026" in heading
     finally:
@@ -158,23 +158,24 @@ def test_a_platform_checkbox_in_the_filters_popover_sets_the_url(
     try:
         page.locator("[data-filters-toggle]").click()
         box = page.locator('[data-filter="platform:linkedin"]')
-        before = page.locator("[data-post-id]").count()
+        cards = page.locator("main [data-post-id]")  # the calendar's, not the rail's queue rows
+        before = cards.count()
         assert not box.is_checked()
         box.click()  # the URL is the state, so the box ticks a moment after the click
         page.wait_for_url(re.compile("platform=linkedin"))
         expect(box).to_be_checked()
-        expect(page.locator("[data-post-id]")).not_to_have_count(before)
-        platforms = page.locator("[data-post-id] [data-platform]").evaluate_all(
+        expect(cards).not_to_have_count(before)
+        platforms = page.locator("main [data-post-id] [data-platform]").evaluate_all(
             "els => [...new Set(els.map(e => e.dataset.platform))]"
         )
         assert platforms == ["linkedin"], platforms
-        assert page.locator("[data-post-id]").count() < before
+        assert cards.count() < before
         box.click()
         expect(box).not_to_be_checked()
         assert "platform=" not in page.url
         page.get_by_label("Search by slug").fill("launch-thread")
         page.wait_for_url(re.compile("q=launch-thread"))
-        expect(page.locator("[data-post-id]")).to_have_count(1)
+        expect(cards).to_have_count(1)
     finally:
         page.context.close()
 
@@ -204,15 +205,15 @@ def test_from_1200px_the_panel_sits_beside_the_content(browser: Any, site: tuple
     page, _ = load(browser, site, "calendar-week", "light")
     try:
         pid = post_id(page, "Spring launch thread")
-        page.locator(f'button[data-post-id="{pid}"]').click()
-        until(page, "document.querySelector('aside')?.contains(document.activeElement)")
+        page.locator(f'main button[data-post-id="{pid}"]').click()
+        until(page, "document.querySelector('[data-post-panel]')?.contains(document.activeElement)")
         assert page.evaluate("document.getElementById('shell-body').inert") is False
         main = page.get_by_role("main").bounding_box()
-        panel = page.locator("aside").bounding_box()
+        panel = page.locator("[data-post-panel]").bounding_box()
         assert main and panel and main["x"] + main["width"] <= panel["x"] + 1
-        page.get_by_role("button", name="Close panel").click()
-        page.locator("aside").wait_for(state="detached")
-        # The calendar swaps bands for columns as the panel leaves, so the opener is new.
+        # The rail goes back to the Needs you queue; focus returns to the card that opened the post.
+        page.get_by_role("button", name=re.compile("^Back to Needs you")).click()
+        page.locator("[data-post-panel]").wait_for(state="detached")
         until(page, f"document.activeElement?.dataset.postId === '{pid}'")
     finally:
         page.context.close()
@@ -239,7 +240,7 @@ def test_the_panel_diffs_two_versions_with_signs_and_shows_media(
     page, _ = load(browser, site, "calendar-week", "light")
     try:
         pid = post_id(page, "Planning day at Example Co")
-        page.locator(f'button[data-post-id="{pid}"]').click()
+        page.locator(f'main button[data-post-id="{pid}"]').click()
         # History, Compare and the CLI lines are disclosures, closed on open.
         page.locator("aside").get_by_role("button", name="Compare versions").click()
         page.locator("aside").get_by_role("button", name="Agent equivalents (CLI)").click()

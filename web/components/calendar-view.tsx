@@ -5,11 +5,13 @@ import * as React from "react"
 
 import { useAppData } from "@/components/app-data"
 import { CalendarToolbar } from "@/components/calendar-toolbar"
+import { DayBands, DayNumber, type Entry, type Open } from "@/components/day-bands"
 import { EmptyState } from "@/components/empty-state"
 import { ErrorPanel } from "@/components/error-panel"
 import { FilterStrip } from "@/components/filters-popover"
+import { RailButton, useRail } from "@/components/inspector-rail"
 import { PlatformMark, platformBlock } from "@/components/platform-swatch"
-import { PostBadges, TypeIcon, settleFocus, useOpenPost } from "@/components/post-bits"
+import { settleFocus, useOpenPost } from "@/components/post-bits"
 import { StatusChip, statusLabel } from "@/components/status-chip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { usePostItems } from "@/components/use-post-items"
@@ -19,9 +21,7 @@ import type { Schema } from "@/lib/api"
 import {
   DAYS,
   addDays,
-  clock,
   dayLabel,
-  dowOf,
   isDateKey,
   localParts,
   monthStart,
@@ -30,56 +30,12 @@ import {
   spanOf,
   todayKey,
   zoneOffset,
-  type Span,
   type View,
 } from "@/lib/time"
-import {
-  FILTER_KEYS,
-  applyFilters,
-  parseFilters,
-  useUrlState,
-  type PostItem,
-} from "@/lib/url-state"
+import { FILTER_KEYS, applyFilters, parseFilters, useUrlState } from "@/lib/url-state"
 import { cn } from "@/lib/utils"
 
-const COLUMNS_MIN = 880 // px of calendar box: from here seven day columns, below it day bands
-const HOUR_REM = 9 // the height of an hour row; keep in step with --hour in globals.css
-const MIN_BLOCK = 60 // minutes: a shorter window is drawn this tall so its text stays readable
-
-type Entry = { item: PostItem; span: Span }
-type Placed = Entry & { lane: number; lanes: number }
-
-/** Posts that overlap in time share the day column side by side, one lane each. */
-function place(entries: Entry[]): Placed[] {
-  const sorted = [...entries].sort(
-    (a, b) => a.span.startMin - b.span.startMin || a.span.endMin - b.span.endMin
-  )
-  const out: Placed[] = []
-  let cluster: Placed[] = []
-  let laneEnds: number[] = []
-  let clusterEnd = 0
-  const flush = () => {
-    for (const p of cluster) p.lanes = laneEnds.length
-    out.push(...cluster)
-    cluster = []
-    laneEnds = []
-  }
-  for (const e of sorted) {
-    if (cluster.length && e.span.startMin >= clusterEnd) flush()
-    const end = Math.max(e.span.endMin, e.span.startMin + MIN_BLOCK)
-    let lane = laneEnds.findIndex((x) => x <= e.span.startMin)
-    if (lane < 0) {
-      lane = laneEnds.length
-      laneEnds.push(end)
-    } else {
-      laneEnds[lane] = end
-    }
-    cluster.push({ ...e, lane, lanes: 0 })
-    clusterEnd = Math.max(clusterEnd, end)
-  }
-  flush()
-  return out
-}
+const MONTH_COLUMNS_MIN = 840 // px of calendar box: from here the month is a grid, below it day bands
 
 /** The time now in the configured zone, refreshed each minute (a clock, not a poll of the API). */
 function useNow(zone: string | null) {
@@ -93,60 +49,11 @@ function useNow(zone: string | null) {
   return now === null ? null : localParts(now, zone)
 }
 
-type Common = { entry: Entry; open: ReturnType<typeof useOpenPost>; current: boolean }
+type Common = { entry: Entry; open: Open; current: boolean }
 
-/** A post as a soft pastel block in the week grid. */
-function Block({
-  entry: { item, span },
-  lane,
-  lanes,
-  open,
-  current,
-}: Common & { lane: number; lanes: number }) {
-  const { row, detail } = item
-  const end = Math.max(span.endMin, span.startMin + MIN_BLOCK)
-  return (
-    <button
-      type="button"
-      data-post-id={row.id}
-      data-start={span.from}
-      data-day={span.day}
-      aria-current={current ? "true" : undefined}
-      title={row.window ?? undefined}
-      onClick={(e) => open(row.id, e.currentTarget)}
-      style={{
-        top: `calc(var(--hour) * ${span.startMin / 60})`,
-        // A minimum, not a fixed height: wider text spacing grows the block instead of clipping it.
-        minHeight: `calc(var(--hour) * ${(end - span.startMin) / 60} - 4px)`,
-        left: `calc(${(lane / lanes) * 100}% + 2px)`,
-        width: `calc(${100 / lanes}% - 4px)`,
-      }}
-      className={cn(
-        "press absolute flex flex-col items-start gap-1 rounded-control p-2.5 text-left shadow-card hover:z-[6] focus-visible:z-[6]",
-        "hover:brightness-[0.97] aria-[current=true]:outline-2 aria-[current=true]:outline-ink",
-        platformBlock(row.platform)
-      )}
-    >
-      <span className="text-sm leading-snug font-medium break-words">{row.title}</span>
-      <span className="text-[0.8125rem] tabular-nums" title={row.window ?? undefined}>
-        {span.text}
-      </span>
-      <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-        <PlatformMark platform={row.platform} />
-        <span className="inline-flex items-center gap-1 text-[0.8125rem]">
-          <TypeIcon type={detail.post_type} className="size-3.5" />
-          {detail.post_type}
-        </span>
-      </span>
-      <StatusChip status={row.status} className="min-h-6 gap-1 px-2 text-[0.8125rem]" />
-      <PostBadges post={detail} />
-    </button>
-  )
-}
-
-/** A post as a card: the day list on a small screen, and the expanded "+N more" of the month. */
-function Card({ entry: { item, span }, open, current, compact }: Common & { compact?: boolean }) {
-  const { row, detail } = item
+/** A post in a month cell: time and status icon, the platform, then the title in two lines. */
+function MonthCard({ entry: { item, span }, open, current }: Common) {
+  const { row } = item
   return (
     <button
       type="button"
@@ -157,155 +64,18 @@ function Card({ entry: { item, span }, open, current, compact }: Common & { comp
       title={row.window ?? undefined}
       onClick={(e) => open(row.id, e.currentTarget)}
       className={cn(
-        "press flex w-full flex-col items-start gap-1.5 rounded-control text-left shadow-card",
+        "press flex w-full min-w-0 flex-col items-start gap-1 rounded-control p-2 text-left shadow-card",
         "hover:brightness-[0.97] aria-[current=true]:outline-2 aria-[current=true]:outline-ink",
-        compact ? "p-2" : "p-4",
         platformBlock(row.platform)
       )}
     >
-      <span className="flex w-full min-w-0 items-baseline gap-2">
-        <span className="shrink-0 text-[0.8125rem] tabular-nums">{span.from}</span>
-        <span className={cn("min-w-0 font-medium", compact ? "truncate text-sm" : "text-base")}>
-          {row.title}
-        </span>
+      <span className="flex w-full items-center justify-between gap-1">
+        <span className="text-[0.8125rem] tabular-nums">{span.from}</span>
+        <StatusChip status={row.status} iconOnly />
       </span>
-      {!compact && (
-        <span className="text-[0.8125rem] tabular-nums">
-          {span.text} · {detail.post_type}
-        </span>
-      )}
-      <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-        <PlatformMark platform={row.platform} />
-        {compact && (
-          <>
-            <TypeIcon type={detail.post_type} className="size-3.5" />
-            <span className="sr-only">{detail.post_type}</span>
-          </>
-        )}
-      </span>
-      <StatusChip status={row.status} className="min-h-6 gap-1 px-2 text-[0.8125rem]" />
-      {!compact && <PostBadges post={detail} />}
+      <PlatformMark platform={row.platform} className="max-w-full" />
+      <span className="line-clamp-2 text-sm leading-snug font-medium break-words">{row.title}</span>
     </button>
-  )
-}
-
-function DayNumber({ day, today, light }: { day: string; today: boolean; light?: boolean }) {
-  const n = parseDate(day)[2]
-  return (
-    <span className="inline-flex items-center gap-2">
-      <span
-        className={cn(
-          "inline-flex size-8 items-center justify-center rounded-full text-lg tabular-nums",
-          today ? "bg-pill text-pill-foreground" : light && "text-label"
-        )}
-      >
-        {n}
-      </span>
-      {today && <span className="text-sm">Today</span>}
-    </span>
-  )
-}
-
-function WeekGrid({
-  days,
-  byDay,
-  today,
-  now,
-  zone,
-  open,
-  post,
-}: {
-  days: string[]
-  byDay: Map<string, Entry[]>
-  today: string
-  now: ReturnType<typeof useNow>
-  zone: string | null
-  open: ReturnType<typeof useOpenPost>
-  post: string | null
-}) {
-  const scroller = React.useRef<HTMLDivElement>(null)
-  const first = days.flatMap((d) => byDay.get(d) ?? []).map((e) => e.span.startMin)
-  const firstHour = first.length ? Math.floor(Math.min(...first) / 60) : 8
-  React.useEffect(() => {
-    const box = scroller.current
-    if (!box) return
-    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
-    box.scrollTop = Math.max(0, firstHour * HOUR_REM * rem - 8)
-  }, [firstHour, days])
-
-  const template = "grid-cols-[3.5rem_repeat(7,minmax(0,1fr))]"
-  const nowMin = now ? now.h * 60 + now.mi : 0
-  const nowDay = now ? `${now.y}-${String(now.mo).padStart(2, "0")}-${String(now.d).padStart(2, "0")}` : ""
-  return (
-    <div
-      ref={scroller}
-      role="region"
-      aria-label="Week calendar"
-      tabIndex={0}
-      className="card-surface relative h-full scroll-pb-32 overflow-y-auto"
-    >
-      <div>
-        <div className={cn("sticky top-0 z-10 grid border-b border-hairline bg-surface", template)}>
-          <div />
-          {days.map((day) => (
-            <div
-              key={day}
-              aria-current={day === today ? "date" : undefined}
-              className="flex items-center gap-2 border-l border-hairline px-3 py-3"
-            >
-              <span className="w-9 text-sm text-label">{DAYS[dowOf(day)]}</span>
-              <DayNumber day={day} today={day === today} />
-            </div>
-          ))}
-        </div>
-        <div className={cn("grid", template)}>
-          <div className="hour-grid relative" aria-hidden="true">
-            {Array.from({ length: 24 }, (_, h) => (
-              <span
-                key={h}
-                className="absolute right-2 -translate-y-1/2 text-[0.8125rem] text-label tabular-nums"
-                style={{ top: `calc(var(--hour) * ${h})`, display: h === 0 ? "none" : undefined }}
-              >
-                {String(h).padStart(2, "0")}:00
-              </span>
-            ))}
-          </div>
-          {days.map((day) => (
-            <section
-              key={day}
-              aria-label={dayLabel(day)}
-              data-day={day}
-              className="hour-grid relative border-l border-hairline"
-            >
-              {place(byDay.get(day) ?? []).map((p) => (
-                <Block
-                  key={p.item.row.id}
-                  entry={p}
-                  lane={p.lane}
-                  lanes={p.lanes}
-                  open={open}
-                  current={post === p.item.row.id}
-                />
-              ))}
-              {now && day === nowDay && (
-                <>
-                  <span className="sr-only">Now: {clock(now)}</span>
-                  <div
-                    aria-hidden="true"
-                    data-now={clock(now)}
-                    className="pointer-events-none absolute inset-x-0 z-[5] h-px bg-ink"
-                    style={{ top: `calc(var(--hour) * ${nowMin / 60})` }}
-                  >
-                    <span className="absolute -top-1 -left-1 size-2 rounded-full bg-ink" />
-                  </div>
-                </>
-              )}
-            </section>
-          ))}
-        </div>
-      </div>
-      <span className="sr-only">Times are shown in {zone ?? "the time each post carries"}.</span>
-    </div>
   )
 }
 
@@ -321,7 +91,7 @@ function MonthGrid({
   month: number
   byDay: Map<string, Entry[]>
   today: string
-  open: ReturnType<typeof useOpenPost>
+  open: Open
   post: string | null
 }) {
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set())
@@ -333,133 +103,72 @@ function MonthGrid({
       className="card-surface relative h-full scroll-pb-32 overflow-y-auto"
     >
       <div>
-      <div className="sticky top-0 z-10 grid grid-cols-7 border-b border-hairline bg-surface">
-        {[...DAYS.slice(1), DAYS[0]].map((d) => (
-          <div key={d} className="px-3 py-2 text-sm text-label">
-            {d}
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7">
-        {days.map((day) => {
-          const mine = byDay.get(day) ?? []
-          const all = expanded.has(day)
-          const shown = all ? mine : mine.slice(0, 3)
-          return (
-            <div
-              key={day}
-              role="group"
-              aria-label={dayLabel(day)}
-              aria-current={day === today ? "date" : undefined}
-              data-day={day}
-              className={cn(
-                "flex min-h-32 min-w-0 flex-col gap-1.5 border-t border-l border-hairline p-2 first:border-l-0 nth-[7n+1]:border-l-0",
-                parseDate(day)[1] !== month && "bg-canvas"
-              )}
-            >
-              <DayNumber day={day} today={day === today} light={parseDate(day)[1] !== month} />
-              {shown.map((entry) => (
-                <Card
-                  key={entry.item.row.id}
-                  entry={entry}
-                  open={open}
-                  current={post === entry.item.row.id}
-                  compact
-                />
-              ))}
-              {mine.length > 3 && (
-                <button
-                  type="button"
-                  aria-expanded={all}
-                  onClick={() => {
-                    const next = new Set(expanded)
-                    if (all) next.delete(day)
-                    else next.add(day)
-                    setExpanded(next)
-                  }}
-                  className="press min-h-6 self-start rounded-full px-2 text-sm text-label underline underline-offset-4 hover:text-ink"
-                >
-                  {all ? "Show fewer" : `+${mine.length - 3} more`}
-                </button>
-              )}
+        <div className="sticky top-0 z-10 grid grid-cols-7 border-b border-hairline bg-surface">
+          {[...DAYS.slice(1), DAYS[0]].map((d) => (
+            <div key={d} className="px-3 py-2 text-sm text-label">
+              {d}
             </div>
-          )
-        })}
-      </div>
-      </div>
-    </div>
-  )
-}
-
-/** Below 768px the grid becomes a list of days, each with a sticky heading. */
-function DayList({
-  days,
-  byDay,
-  today,
-  open,
-  post,
-  quietDays,
-  label,
-}: {
-  days: string[]
-  byDay: Map<string, Entry[]>
-  today: string
-  open: ReturnType<typeof useOpenPost>
-  post: string | null
-  quietDays: boolean
-  label: string
-}) {
-  return (
-    <div
-      role="region"
-      aria-label={label}
-      tabIndex={0}
-      className="flex h-full scroll-pb-32 flex-col gap-6 overflow-y-auto"
-    >
-      {days
-        .filter((d) => quietDays || (byDay.get(d) ?? []).length)
-        .map((day) => {
-          const mine = byDay.get(day) ?? []
-          return (
-            <section key={day} aria-label={dayLabel(day)} data-day={day} className="flex flex-col gap-3">
-              <h3
+          ))}
+        </div>
+        <div className="grid grid-cols-7">
+          {days.map((day) => {
+            const mine = byDay.get(day) ?? []
+            const all = expanded.has(day)
+            const shown = all ? mine : mine.slice(0, 2)
+            return (
+              <div
+                key={day}
+                role="group"
+                aria-label={dayLabel(day)}
                 aria-current={day === today ? "date" : undefined}
-                className="sticky top-0 z-10 flex items-center gap-3 rounded-control bg-canvas px-4 py-2 text-base font-normal"
+                data-day={day}
+                className={cn(
+                  "flex min-h-24 min-w-0 flex-col gap-1.5 border-t border-l border-hairline p-2 nth-[7n+1]:border-l-0",
+                  parseDate(day)[1] !== month && "bg-canvas"
+                )}
               >
-                <span className="text-label">{DAYS[dowOf(day)]}</span>
-                <DayNumber day={day} today={day === today} />
-              </h3>
-              {mine.length ? (
-                mine.map((entry) => (
-                  <Card
+                <DayNumber day={day} today={day === today} light={parseDate(day)[1] !== month} />
+                {shown.map((entry) => (
+                  <MonthCard
                     key={entry.item.row.id}
                     entry={entry}
                     open={open}
                     current={post === entry.item.row.id}
                   />
-                ))
-              ) : (
-                <p className="text-sm text-label">Nothing planned.</p>
-              )}
-            </section>
-          )
-        })}
+                ))}
+                {mine.length > 2 && (
+                  <button
+                    type="button"
+                    aria-expanded={all}
+                    onClick={() => {
+                      const next = new Set(expanded)
+                      if (all) next.delete(day)
+                      else next.add(day)
+                      setExpanded(next)
+                    }}
+                    className="press min-h-6 self-start rounded-full px-2 text-sm text-label underline underline-offset-4 hover:text-ink"
+                  >
+                    {all ? "Show fewer" : `+${mine.length - 2} more`}
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
 
 function CalendarSkeleton() {
   return (
-    <div role="status" aria-busy="true" aria-label="Loading the calendar" className="card-surface p-4">
-      <div className="grid grid-cols-7 gap-3">
-        {Array.from({ length: 7 }, (_, i) => (
-          <div key={i} className="flex flex-col gap-3">
-            <Skeleton className="h-8 w-16" />
-            <Skeleton className="h-24 w-full rounded-control" />
-            {i % 2 === 0 && <Skeleton className="h-24 w-full rounded-control" />}
-          </div>
-        ))}
-      </div>
+    <div role="status" aria-busy="true" aria-label="Loading the calendar" className="flex flex-col gap-2">
+      {Array.from({ length: 4 }, (_, i) => (
+        <div key={i} className="flex gap-3 rounded-inner bg-surface p-2 shadow-card">
+          <Skeleton className="h-16 w-20" />
+          <Skeleton className="h-16 flex-1 rounded-control" />
+        </div>
+      ))}
     </div>
   )
 }
@@ -475,14 +184,16 @@ function CalendarBody({ schema }: { schema: Schema }) {
   const items = usePostItems(from, to)
   const open = useOpenPost()
   const now = useNow(zone)
-  // Columns need room: the width of the calendar box itself, so the panel opening beside it
-  // switches to day bands instead of scrolling sideways. Bands are the first paint (the safe layout).
+  const { beside } = useRail()
+  // The week is always day bands (the inspector rail takes the width a column grid would want).
+  // The month is a grid when its box is wide enough to read; the width of the calendar box itself,
+  // so the rail opening beside it never causes sideways scroll. Bands are the first paint.
   const [box, width] = useElementWidth<HTMLDivElement>()
-  const columns = width !== null && width >= COLUMNS_MIN
-  // The layout switched (the panel closed): give focus to the post that opened it, if one waits.
+  const monthGrid = view === "month" && width !== null && width >= MONTH_COLUMNS_MIN
+  // The layout switched (the box widened or narrowed): give focus to the post that opened it, if one waits.
   React.useEffect(() => {
     settleFocus()
-  }, [columns])
+  }, [monthGrid])
   const { session } = useAppData()
   const role = session.state === "ok" ? session.data.role : null
   const post = params.get("post")
@@ -531,6 +242,8 @@ function CalendarBody({ schema }: { schema: Schema }) {
         step={step}
         today={() => set({ date: today })}
         onView={(next) => set({ view: next, date })}
+        // The rail is the Needs you queue; below 1180 px, where it is a sheet, a button opens it.
+        needsYou={beside ? null : <RailButton />}
       />
       <FilterStrip
         summary={
@@ -555,27 +268,7 @@ function CalendarBody({ schema }: { schema: Schema }) {
               line={`No posts in this ${unit}${FILTER_KEYS.some((key) => params.get(key)) ? " with these filters" : ""}. Agents add posts through the CLI.`}
               command="brandcal add --as NAME ..."
             />
-          ) : !columns ? (
-            <DayList
-              days={days}
-              byDay={byDay}
-              today={today}
-              open={open}
-              post={post}
-              quietDays={view === "week"}
-              label={label}
-            />
-          ) : view === "week" ? (
-            <WeekGrid
-              days={days}
-              byDay={byDay}
-              today={today}
-              now={inRange ? now : null}
-              zone={zone}
-              open={open}
-              post={post}
-            />
-          ) : (
+          ) : monthGrid ? (
             <MonthGrid
               days={days}
               month={month}
@@ -583,6 +276,18 @@ function CalendarBody({ schema }: { schema: Schema }) {
               today={today}
               open={open}
               post={post}
+            />
+          ) : (
+            <DayBands
+              days={days}
+              byDay={byDay}
+              today={today}
+              now={inRange ? now : null}
+              open={open}
+              post={post}
+              quietDays={view === "week"}
+              label={label}
+              zone={zone}
             />
           )}
         </div>

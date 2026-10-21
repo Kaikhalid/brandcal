@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { AppDataProvider } from "@/components/app-data"
 import { AppSidebar } from "@/components/app-sidebar"
 import { DevBanner } from "@/components/dev-banner"
+import { NeedsQueueProvider } from "@/components/needs-queue"
 import { NoticeProvider } from "@/components/notice"
 import { PostPanel } from "@/components/post-panel"
 import { Shortcuts } from "@/components/shortcuts"
@@ -45,6 +46,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <AppDataProvider>
       <NoticeProvider>
+      <NeedsQueueProvider>
       <TooltipProvider delay={300}>
         <DevBanner />
         <SidebarProvider>
@@ -94,6 +96,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
           </ToolbarProvider>
         </SidebarProvider>
       </TooltipProvider>
+      </NeedsQueueProvider>
       </NoticeProvider>
     </AppDataProvider>
   )

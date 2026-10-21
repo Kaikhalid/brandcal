@@ -1,6 +1,6 @@
 "use client"
 
-import { Copy, TriangleAlert, X } from "lucide-react"
+import { ChevronLeft, Copy, TriangleAlert, X } from "lucide-react"
 import * as React from "react"
 import { Suspense } from "react"
 import { flushSync } from "react-dom"
@@ -8,13 +8,14 @@ import { flushSync } from "react-dom"
 import { useAppData, type Loadable } from "@/components/app-data"
 import { Disclosure } from "@/components/disclosure"
 import { ErrorPanel } from "@/components/error-panel"
+import { QueueRail, railFrame, useRail } from "@/components/inspector-rail"
+import { useNeedsQueue } from "@/components/needs-queue"
 import { useNotice } from "@/components/notice"
 import { PlatformBadge } from "@/components/platform-swatch"
 import { Actions, type ActionsHost } from "@/components/post-actions"
 import { PostBadges, TypeTag, focusPostLater, takeOpener, words } from "@/components/post-bits"
 import { StatusChip } from "@/components/status-chip"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useMedia } from "@/components/use-media"
 import {
   getEvents,
   getPost,
@@ -27,6 +28,7 @@ import {
   type Version,
 } from "@/lib/api"
 import { diffLines } from "@/lib/diff"
+import { afterDecision } from "@/lib/needs-you"
 import { dayLabel, fullTime, spanOf, windowLabel, windowSpansDays } from "@/lib/time"
 import { useUrlState } from "@/lib/url-state"
 import { cn } from "@/lib/utils"
@@ -412,10 +414,21 @@ function Body({ data, schema, host }: { data: Data; schema: Schema; host: Action
   )
 }
 
-function Panel({ id }: { id: string }) {
+// A decision takes the post out of your hands, so on the calendar's rail the next in the queue opens.
+const DECISIONS: PostAction["id"][] = ["approve", "request-changes", "cancel"]
+
+/** `rail`: on the calendar, where this is the inspector rail's detail state. `beside`: a column, not a sheet. */
+function Panel({ id, rail, beside }: { id: string; rail: boolean; beside: boolean }) {
   const { schema, refresh } = useAppData()
-  const { set } = useUrlState()
+  const { params, set } = useUrlState()
   const notify = useNotice()
+  const queue = useNeedsQueue()
+  const queued = React.useRef(queue.posts)
+  React.useEffect(() => {
+    queued.current = queue.posts
+  }, [queue.posts])
+  // A sheet opened from the queue goes back to it; one opened from the calendar just closes.
+  const back = rail && (beside || params.get("queue") === "1")
   const { state, reload } = usePanelData(id)
   const heading = React.useRef<HTMLHeadingElement>(null)
   const root = React.useRef<HTMLElement>(null)
@@ -435,19 +448,31 @@ function Panel({ id }: { id: string }) {
     notice: null as string | null,
     reloading: false,
     closed: true,
+    // Where the rail goes after a decision: a post id, null for all clear, undefined to stay.
+    advance: undefined as string | null | undefined,
   })
   const settle = React.useCallback(() => {
     const g = gate.current
     if (g.reloading || !g.closed) return
     if (g.notice) notify(g.notice)
     g.notice = null
+    if (g.advance !== undefined) {
+      const next = g.advance
+      g.advance = undefined
+      g.pending = null
+      takeOpener()
+      // The panel of the next post mounts and takes focus on its heading; all clear focuses the queue's.
+      set({ post: next }, "replace")
+      if (next === null) window.setTimeout(() => document.getElementById("rail-title")?.focus(), 80)
+      return
+    }
     if (g.pending) {
       // The same action, or the panel heading when it no longer exists or is disabled.
       const same = root.current?.querySelector<HTMLElement>(`[data-action-button="${g.pending}"]:not([disabled])`)
       ;(same ?? heading.current)?.focus()
     }
     g.pending = null
-  }, [notify])
+  }, [notify, set])
 
   const host = React.useMemo<ActionsHost>(
     () => ({
@@ -464,6 +489,8 @@ function Panel({ id }: { id: string }) {
         g.pending = actionId
         g.reloading = true
         setBanner(null)
+        // Taken before the write is read back: the queue as it stood when the decision was made.
+        if (rail && DECISIONS.includes(actionId)) g.advance = afterDecision(queued.current, id)
         const fresh = await reload()
         const post = fresh.state === "ok" ? fresh.data.post : null
         const status = String(result.status ?? post?.status ?? "")
@@ -485,7 +512,7 @@ function Panel({ id }: { id: string }) {
         settle()
       },
     }),
-    [reload, refresh, settle]
+    [reload, refresh, settle, rail, id]
   )
 
   // Focus moves into the panel when it opens or switches post.
@@ -498,9 +525,12 @@ function Panel({ id }: { id: string }) {
     // The page behind may still be inert; focus cannot land on it until that is lifted.
     const behind = document.getElementById("shell-body")
     if (behind) behind.inert = false
-    const back = takeOpener()
-    if (back && document.contains(back)) {
-      back.focus({ preventScroll: true })
+    const opener = takeOpener()
+    if (opener && document.contains(opener)) {
+      opener.focus({ preventScroll: true })
+    } else if (back) {
+      // The queue row that opened it is redrawn as the queue returns: focus it once it is there.
+      focusPostLater(id, "[data-inspector-rail]")
     } else if (document.querySelector(`button[data-post-id="${id}"]`)) {
       // The calendar re-lays itself out when the panel closes; focus the post once it has.
       focusPostLater(id)
@@ -511,7 +541,7 @@ function Panel({ id }: { id: string }) {
         heading.focus({ preventScroll: true })
       }
     }
-  }, [set, id])
+  }, [set, id, back])
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -530,14 +560,37 @@ function Panel({ id }: { id: string }) {
       ref={root}
       aria-labelledby="panel-title"
       data-post-panel={id}
+      data-inspector-rail={rail ? "detail" : undefined}
       className={cn(
-        // scroll-pb keeps a focused control clear of the notice card at the bottom right (WCAG 2.4.11).
-        "glass scroll-pb-32 fixed top-(--shell-top) right-0 bottom-0 z-40 w-[min(34rem,100vw)] overflow-y-auto overscroll-contain",
-        "min-[1200px]:sticky min-[1200px]:z-10 min-[1200px]:h-[calc(100svh-var(--shell-top))] min-[1200px]:w-[30rem] min-[1200px]:shrink-0 min-[1200px]:self-start"
+        rail
+          ? railFrame(beside)
+          : cn(
+              // scroll-pb keeps a focused control clear of the notice card at the bottom right (WCAG 2.4.11).
+              "glass scroll-pb-32 fixed top-(--shell-top) right-0 bottom-0 z-40 w-[min(34rem,100vw)] overflow-y-auto overscroll-contain",
+              "min-[1200px]:sticky min-[1200px]:z-10 min-[1200px]:h-[calc(100svh-var(--shell-top))] min-[1200px]:w-[30rem] min-[1200px]:shrink-0 min-[1200px]:self-start"
+            )
       )}
     >
       {/* pb-32: the last rows can scroll clear of the notice card at the bottom right (2.4.11). */}
-      <div className="flex flex-col gap-7 p-6 pb-32">
+      <div className={cn("flex flex-col gap-7", rail ? "p-4" : "p-6", "pb-32")}>
+        {back && (
+          <button
+            type="button"
+            data-rail-back
+            onClick={close}
+            className="press -mb-3 inline-flex h-10 items-center gap-1 self-start rounded-full border border-control bg-surface pr-4 pl-2 text-sm hover:bg-muted"
+          >
+            <ChevronLeft aria-hidden="true" strokeWidth={1.5} className="size-5" />
+            <span className="sr-only">Back to </span>
+            Needs you
+            {queue.total ? (
+              <span className="ml-1 text-label tabular-nums">
+                {queue.total}
+                <span className="sr-only"> waiting</span>
+              </span>
+            ) : null}
+          </button>
+        )}
         <div className="flex items-start justify-between gap-3">
           <h2
             id="panel-title"
@@ -547,18 +600,23 @@ function Panel({ id }: { id: string }) {
             // not a control, so it shows no ring: Chromium counts focus on a deep link as
             // :focus-visible, and any ring around a short title reads as a button. Keyboard focus
             // on every control keeps the global ring.
-            className="text-2xl leading-tight tracking-tight outline-none focus:outline-none focus-visible:outline-none"
+            className={cn(
+              "leading-tight tracking-tight outline-none focus:outline-none focus-visible:outline-none",
+              rail ? "px-1 text-2xl font-light" : "text-2xl"
+            )}
           >
             {title}
           </h2>
-          <button
-            type="button"
-            onClick={close}
-            aria-label="Close panel"
-            className="press inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-control bg-surface hover:bg-muted"
-          >
-            <X aria-hidden="true" strokeWidth={1.5} className="size-5" />
-          </button>
+          {!back && (
+            <button
+              type="button"
+              onClick={close}
+              aria-label="Close panel"
+              className="press inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-control bg-surface hover:bg-muted"
+            >
+              <X aria-hidden="true" strokeWidth={1.5} className="size-5" />
+            </button>
+          )}
         </div>
         {banner && (
           <div
@@ -589,21 +647,25 @@ function Panel({ id }: { id: string }) {
 function Host() {
   const { params } = useUrlState()
   const id = params.get("post")
-  const beside = useMedia("(min-width: 1200px)")
+  const { onCalendar: rail, beside } = useRail()
+  const sheet = rail && !beside && params.get("queue") === "1"
 
-  // Below 1200px the panel overlays, so everything behind it is inert. From 1200px it sits beside
-  // the content, which stays usable.
+  // As a sheet (the panel below 1200 px, the calendar's queue below 1180 px) everything behind is
+  // inert. As a column beside the content, the content stays usable.
   React.useEffect(() => {
     const body = document.getElementById("shell-body")
     if (!body) return
-    body.inert = Boolean(id) && !beside
+    body.inert = (Boolean(id) || sheet) && !beside
     return () => {
       body.inert = false
     }
-  }, [id, beside])
+  }, [id, sheet, beside])
 
+  // On the calendar the rail is always there from 1180 px: the queue, or the open post.
   // Keyed by post: another post starts with a clean banner and no pending focus.
-  return id ? <Panel key={id} id={id} /> : null
+  if (id) return <Panel key={id} id={id} rail={rail} beside={beside} />
+  if (rail && (beside || sheet)) return <QueueRail beside={beside} />
+  return null
 }
 
 /** The side panel of the open post (`?post=ID`), shown from any view. */
