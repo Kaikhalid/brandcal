@@ -226,6 +226,9 @@ def test_dialogs_open_with_the_right_focus_and_say_what_they_do(
         text = dialog.inner_text()
         focused(page, focus)
         assert words in text
+        if action == "approve":  # the decision names the zone it is made in (R-A 2)
+            offset_seen = r"to be published .*\d\d:\d\d to \d\d:\d\d \([+-]\d\d:\d\d\)\."
+            assert re.search(offset_seen, text), text
         assert "Agent equivalent (CLI)" in text
         assert "This console action records channel console with your verified identity." in text
         assert dialog.locator("code[data-cli]").inner_text().startswith("brandcal")

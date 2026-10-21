@@ -165,7 +165,7 @@ and never let two hit areas overlap.
   it scrolls inside itself with sticky day headings, and the page does not scroll. Bottom
   `scroll-padding` keeps a focused control clear of the notice card.
 - **Container width, not viewport.** The calendar reads the width of its own box
-  (`useElementWidth`): from 880 px seven day columns, below that day bands. The post panel opening
+  (`useElementWidth`): from 840 px seven day columns, below that day bands. The post panel opening
   beside it therefore never causes sideways scroll. The bar's controls collapse to icon buttons by
   the width of the content column (a container query at 1100 px).
 - **Gutters** 24 px (16 below 640), gaps 8 and 16. Gaps between wells are 8 px and a soft shadow,
@@ -173,11 +173,16 @@ and never let two hit areas overlap.
 - **Week stacks, no hour axis.** The week is seven `rounded-inner` wells inside the calendar card
   (8 px padding, 6 px when the calendar box is under 60 rem). Each well has a 48 px sticky header
   (weekday, date numeral, the black circle and the word "Today" for today, tinted `--muted`) and its
-  posts as cards in time order: row 1 time and platform name, row 2 title (two lines, three in a
-  very narrow well), row 3 the status chip. A thin ink "now" rule sits in today's stack at the
-  right place; an empty day says "Nothing planned". The month uses the same wells and cards in rows
-  that size to their content (at least 96 px). Day bands (a box under 880 px) flow their cards in
-  as many columns of at least 16 rem as fit.
+  posts as cards in time order: row 1 time (the whole window, "09:00–10:00", from 8 rem of card)
+  and platform name, row 2 title (two lines, three in a very narrow well, balanced, never
+  hyphenated), row 3 the status chip (its icon drops under 8 rem, the word stays), then any badge
+  with its short word from 8 rem (the icon alone, with the whole text for screen readers, below).
+  A thin ink "now" rule sits in today's stack at the right place; an empty day says "Nothing
+  planned". The month uses the same wells and cards in rows that size to their content (at least
+  96 px; 64 px for a week with no posts that is not the selected week). Day bands (a box under
+  840 px) flow their cards in as many columns of at least 16 rem as fit.
+- **Offset where the decision is made.** The approve dialog and the panel's When row print the
+  zone offset after the time ("09:00 to 10:00 (+03:00)"), as the strip and the card tooltip do.
 
 ## 7. Motion
 

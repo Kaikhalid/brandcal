@@ -26,7 +26,7 @@ import type {
   Seen,
   WriteResult,
 } from "@/lib/api"
-import { dayLabel, spanOf } from "@/lib/time"
+import { dayLabel, spanOf, zoneOffset } from "@/lib/time"
 import { buildWindow, windowParts, type WindowParts } from "@/lib/window"
 import { cn } from "@/lib/utils"
 
@@ -289,7 +289,10 @@ function saysFor(a: PostAction, post: PostDetail, schema: Schema): string {
   switch (a.id) {
     case "approve": {
       const when = post.window ? spanOf(post.window, schema.timezone) : null
-      return `Approve ${short(post)}${when ? `, to be published ${dayLabel(when.day)}, ${when.text}` : ""}. The post can then be published inside that window.`
+      const offset = post.window
+        ? zoneOffset(schema.timezone, new Date(post.window.split("/")[0]))
+        : null
+      return `Approve ${short(post)}${when ? `, to be published ${dayLabel(when.day)}, ${when.text}${offset ? ` (${offset})` : ""}` : ""}. The post can then be published inside that window.`
     }
     case "request-changes":
       return `Send ${short(post)} back to the writer. All three fields are required.`

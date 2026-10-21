@@ -99,6 +99,52 @@ First shots, then fixes:
 4. Today was never visible in the demo (its week is in March), so a clock-pinned shot and test cover the numeral,
    the word, the tint and the now rule.
 
+## Refinement (R-A)
+
+Six changes from section 4 of COMPARISON.md, in order of value. All six are done; none was skipped. Where
+this section and the text above disagree (the 880 px rule, hyphenation, the 96 px empty week), this section
+is current.
+
+1. **The week stays visible beside the panel** (`calendar-view.tsx`, `COLUMNS_MIN` 880 to 840). With the
+   sidebar collapsed and the 30 rem panel open the box is about 848 px, so seven stacks stay (wells about
+   115 px, a card about 103 px). With the sidebar open the box is about 656 px and the bands remain.
+   Before: 2.5 days on screen as bands. After: all seven days, first card at 16.7% of the viewport.
+   Test: `test_the_week_keeps_seven_stacks_beside_the_panel_with_the_sidebar_collapsed` (no sideways scroll,
+   nothing clipped or past its well, the open post still outlined). The two older tests that assert bands
+   open the panel with the sidebar open and are unchanged.
+2. **The offset where the decision is made** (`post-actions.tsx`, `post-panel.tsx`). The approve dialog now
+   reads "to be published Tue 2 Mar, 09:00 to 10:00 (+01:00)" and the panel's When row "Tue 10 Mar, 14:00 to
+   15:00 (+01:00)"; the demo shows its own zone, and Kai's `+03:00` once the zone is configured. The offset is
+   the one at the window's start, as in the card tooltip. Tests: the approve dialog sentence
+   (`test_next_writes.py`) and the When row (`test_next_views.py`).
+3. **Chips on one line, no hyphenation** (`StackCard`). Under 8 rem of card the status chip drops its icon
+   (the word stays) and tightens its padding; under 7 rem the card padding and the title shrink a step
+   (13 px, then 12 px). The title uses `text-wrap: balance` instead of `hyphens: auto`. Before at 1024:
+   "Awaiting you" on two lines, "part-ner", "announce-ment". After: one line, whole words. A long label such
+   as "Changes requested" still wraps to two lines, by design. Tests: `test_a_narrow_card_keeps_one_line_chips_and_no_window`
+   and the same chip check with the rail collapsed and the panel open.
+4. **No orphan badge pill** (`post-bits.tsx`). From 8 rem of card a badge prints a short word beside its icon
+   ("Queued", "Claimed", "On hold"; the tooltip and the screen-reader text keep the whole "Natively scheduled").
+   Under 8 rem it stays an icon with the whole text for screen readers and the tooltip, as the brief allows.
+   The short word, not the full text, because "Natively scheduled" does not fit 128 px beside an icon.
+   Test: at 1440 no badge is an icon alone.
+5. **The window on the card** (`StackCard`). From 8 rem of card (a well of about 144 px) row 1 reads
+   "09:00–10:00"; below it "09:00" alone. The platform name and the type icon wrap together as one unit, so a
+   narrow row 1 never splits them. The start time keeps its own `data-card-time` node (tests that read the
+   time are unchanged) and screen readers hear "09:00 to 10:00" at every width. Tests: both card tests above.
+6. **Quiet empty weeks in the month** (`MonthGrid`). A week with no posts that is not the selected week is
+   64 px instead of 96 px; the first row stays. Before: first card at 43.8% of the 900 px viewport at 1440.
+   After: 36.7%. A busy week still grows; the no-sideways-scroll test is unchanged. Test: the month rows test
+   asserts an empty row of 70 px or less.
+
+Other measures at 1440×900 (unchanged): header 11.3%, first card 16.7% in the week; 1024 rail 13.3% and 19.5%.
+Still open: in the very narrowest wells (about 100 px of card, the panel open with the sidebar collapsed) the
+title is 12 px, the smallest type in the app; it is whole words, but the tooltip and the panel hold the post in
+full. A week-1440 panel with the sidebar open is still bands, by design.
+
+New shots in `/workspace/brandcal_ui_shots/dirs/a-refined/` (script `shots/a-refined/test_shots.py`, no console
+errors): the same set as above plus `panel-1440-<theme>-collapsed` (the new stacks beside the panel).
+
 ## Screenshots
 
 `/workspace/brandcal_ui_shots/dirs/a/` (script `shots/a/test_shots.py`; no console errors), each in `light` and

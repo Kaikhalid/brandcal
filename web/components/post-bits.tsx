@@ -51,16 +51,23 @@ export function TypeTag({ type }: { type: string }) {
 }
 
 /** What is going on with a post beyond its status: queued on the platform, claimed, on hold. */
-export function postBadges(post: PostDetail): { id: string; Icon: LucideIcon; text: string }[] {
+export function postBadges(
+  post: PostDetail
+): { id: string; Icon: LucideIcon; text: string; short: string }[] {
   const out = []
-  if (post.native_scheduled_at) out.push({ id: "queued", Icon: ListChecks, text: "Natively scheduled" })
-  if (post.claimed_by) out.push({ id: "claimed", Icon: Hand, text: `Claimed by ${post.claimed_by}` })
-  if (post.hold_until) out.push({ id: "hold", Icon: CirclePause, text: "On hold" })
+  if (post.native_scheduled_at)
+    out.push({ id: "queued", Icon: ListChecks, text: "Natively scheduled", short: "Queued" })
+  if (post.claimed_by)
+    out.push({ id: "claimed", Icon: Hand, text: `Claimed by ${post.claimed_by}`, short: "Claimed" })
+  if (post.hold_until) out.push({ id: "hold", Icon: CirclePause, text: "On hold", short: "On hold" })
   return out
 }
 
+/** The badges of a post. `compact` (a card in a week stack): the icon alone in a narrow well, with
+ *  the whole text for screen readers; from 8 rem of card (the nearest container) the short word is
+ *  printed beside the icon, so the pill never reads as an unlabelled mark. */
 export function PostBadges({ post, compact }: { post: PostDetail; compact?: boolean }) {
-  return postBadges(post).map(({ id, Icon, text }) => (
+  return postBadges(post).map(({ id, Icon, text, short }) => (
     <span
       key={id}
       data-badge={id}
@@ -68,7 +75,16 @@ export function PostBadges({ post, compact }: { post: PostDetail; compact?: bool
       className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[0.8125rem] leading-5 text-ink"
     >
       <Icon aria-hidden="true" strokeWidth={1.5} className="size-3.5 shrink-0" />
-      {compact ? <span className="sr-only">{text}</span> : text}
+      {compact ? (
+        <>
+          <span className="sr-only">{text}</span>
+          <span aria-hidden="true" className="hidden @min-[8rem]:inline">
+            {short}
+          </span>
+        </>
+      ) : (
+        text
+      )}
     </span>
   ))
 }

@@ -44,7 +44,9 @@ import {
 } from "@/lib/url-state"
 import { cn } from "@/lib/utils"
 
-const COLUMNS_MIN = 880 // px of calendar box: from here seven day columns, below it day bands
+// px of calendar box: from here seven day columns, below it day bands. 840 keeps the stacks beside the
+// 30 rem panel when the sidebar is collapsed (box about 848 px, wells about 120 px, as at 1024).
+const COLUMNS_MIN = 840
 
 type Entry = { item: PostItem; span: Span }
 
@@ -82,32 +84,45 @@ function StackCard({ entry: { item, span }, open, current, zone }: Common & { zo
       title={windowTip(row.title, row.window, zone)}
       onClick={(e) => open(row.id, e.currentTarget)}
       className={cn(
-        "press flex w-full min-w-0 flex-col items-start gap-1.5 rounded-control p-2.5 text-left shadow-card @max-[8rem]:p-2",
+        "press flex w-full min-w-0 flex-col items-start gap-1.5 rounded-control p-2.5 text-left shadow-card @max-[8rem]:p-2 @max-[7rem]:p-1.5",
         "hover:brightness-[0.97] aria-[current=true]:outline-2 aria-[current=true]:outline-ink",
         platformBlock(row.platform)
       )}
     >
       <span className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[0.8125rem] leading-snug">
-        <span data-card-time className="font-medium tabular-nums">
-          {span.from}
+        {/* The start time always; the end joins it from 8 rem of card ("09:00–10:00"). The platform and
+            the type icon wrap together, so row 1 never splits them. */}
+        <span className="font-medium tabular-nums">
+          <span data-card-time>{span.from}</span>
+          <span data-card-end aria-hidden="true" className="hidden @min-[8rem]:inline">
+            –{span.to}
+          </span>
+          <span className="sr-only"> to {span.to}</span>
         </span>
-        <PlatformMark platform={row.platform} bare />
-        <TypeIcon type={detail.post_type} className="ml-auto size-3.5 @max-[10rem]:hidden" />
-        <span className="sr-only">{detail.post_type}</span>
+        <span className="flex min-w-0 grow items-center gap-2">
+          <PlatformMark platform={row.platform} bare />
+          <TypeIcon type={detail.post_type} className="ml-auto size-3.5 @max-[10rem]:hidden" />
+          <span className="sr-only">{detail.post_type}</span>
+        </span>
       </span>
       <span
         data-card-title
-        className="line-clamp-2 min-w-0 text-sm leading-snug font-medium hyphens-auto wrap-anywhere @max-[8rem]:line-clamp-3"
+        className="line-clamp-2 min-w-0 text-sm leading-snug font-medium text-balance wrap-anywhere @max-[8rem]:line-clamp-3 @max-[8rem]:text-[0.8125rem] @max-[7rem]:text-xs"
       >
         {row.title}
       </span>
-      <StatusChip status={row.status} className="min-h-7 gap-1 pr-2.5 pl-2 text-[0.8125rem]" />
+      {/* In a narrow well (under 8 rem of card) the chip keeps its word and drops its icon, so
+          "Awaiting you" stays on one line. */}
+      <StatusChip
+        status={row.status}
+        className="min-h-7 gap-1 pr-2.5 pl-2 text-[0.8125rem] @max-[8rem]:px-2 @max-[7rem]:px-1.5 @max-[8rem]:[&>svg]:hidden"
+      />
       <PostBadges post={detail} compact />
     </button>
   )
 }
 
-/** A post as a full-width card in the day bands (the phone and any calendar box under 880 px). */
+/** A post as a full-width card in the day bands (the phone and any calendar box under 840 px). */
 function Card({ entry: { item, span }, open, current }: Common) {
   const { row, detail } = item
   return (
@@ -273,10 +288,12 @@ function WeekStacks({
 }
 
 /** The month: the same wells and cards as the week, a row per week sized to what it holds
- *  (at least 96 px), so an empty week is a quiet line and a busy one grows. */
+ *  (at least 96 px; 64 px for a week with no posts that is not the selected week), so an empty
+ *  week is a quiet line and a busy one grows. */
 function MonthGrid({
   days,
   month,
+  date,
   byDay,
   today,
   zone,
@@ -285,6 +302,7 @@ function MonthGrid({
 }: {
   days: string[]
   month: number
+  date: string
   byDay: Map<string, Entry[]>
   today: string
   zone: string | null
@@ -292,6 +310,13 @@ function MonthGrid({
   post: string | null
 }) {
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set())
+  // The days of weeks that hold no posts and are not the selected week: their rows are shorter.
+  const quiet = new Set<string>()
+  for (let i = 0; i < days.length; i += 7) {
+    const week = days.slice(i, i + 7)
+    if (!week.includes(date) && week.every((d) => (byDay.get(d) ?? []).length === 0))
+      week.forEach((d) => quiet.add(d))
+  }
   return (
     <div
       role="region"
@@ -320,7 +345,8 @@ function MonthGrid({
               aria-current={day === today ? "date" : undefined}
               data-day={day}
               className={cn(
-                "@container flex min-h-24 min-w-0 flex-col gap-2 rounded-inner p-2",
+                "@container flex min-w-0 flex-col gap-2 rounded-inner p-2",
+                quiet.has(day) ? "min-h-16" : "min-h-24",
                 outside ? "inset-ring inset-ring-hairline" : wellTone(day === today)
               )}
             >
@@ -397,7 +423,7 @@ function DayList({
               </h3>
               {mine.length ? (
                 // Cards flow in as many columns as the box allows: one on a phone, two or three
-                // when a wide box (the sidebar open, the panel open) is still under 880 px.
+                // when a wide box (the sidebar open, the panel open) is still under 840 px.
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
                   {mine.map((entry) => (
                     <Card
@@ -549,6 +575,7 @@ function CalendarBody({ schema }: { schema: Schema }) {
             <MonthGrid
               days={days}
               month={month}
+              date={date}
               byDay={byDay}
               today={today}
               zone={zone}

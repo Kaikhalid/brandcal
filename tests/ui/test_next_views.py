@@ -408,7 +408,9 @@ def test_the_panel_hides_a_same_day_window_that_repeats_when(
     try:
         wait_drawn(page, "aside[data-post-panel] pre")
         when = page.locator("aside[data-post-panel] dt:text-is('When') + dd")
-        assert re.fullmatch(r"Tue \d{1,2} [A-Z][a-z]{2}, 10:00 to 11:00", when.inner_text().strip())
+        # The offset is printed where the decision is made (R-A 2), e.g. "(+01:00)".
+        shown = when.inner_text().strip()
+        assert re.fullmatch(r"Tue \d{1,2} [A-Z][a-z]{2}, 10:00 to 11:00 \([+-]\d\d:\d\d\)", shown)
         assert page.locator("aside[data-post-panel] dt:text-is('Window')").count() == 0
         assert not problems, problems
     finally:

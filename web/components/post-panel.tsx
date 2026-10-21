@@ -27,7 +27,7 @@ import {
   type Version,
 } from "@/lib/api"
 import { diffLines } from "@/lib/diff"
-import { dayLabel, fullTime, spanOf, windowLabel, windowSpansDays } from "@/lib/time"
+import { dayLabel, fullTime, spanOf, windowLabel, windowSpansDays, zoneOffset } from "@/lib/time"
 import { useUrlState } from "@/lib/url-state"
 import { cn } from "@/lib/utils"
 
@@ -374,6 +374,7 @@ function Body({ data, schema, host }: { data: Data; schema: Schema; host: Action
   const { post } = data
   const zone = schema.timezone
   const w = post.window ? spanOf(post.window, zone) : null
+  const offset = post.window ? zoneOffset(zone, new Date(post.window.split("/")[0])) : null
   return (
     <div className="flex flex-col gap-7">
       <div className="flex flex-wrap items-center gap-2">
@@ -388,7 +389,7 @@ function Body({ data, schema, host }: { data: Data; schema: Schema; host: Action
         rows={[
           ["Post", <code key="p" className="font-mono">{post.id}</code>],
           ["Slug", <code key="s" className="font-mono">{post.slug}</code>],
-          ["When", w && `${dayLabel(w.day)}, ${w.text}`],
+          ["When", w && `${dayLabel(w.day)}, ${w.text}${offset ? ` (${offset})` : ""}`],
           [
             "Window",
             // A same-day window reads exactly like "When"; show the row only when it adds an end day.

@@ -185,9 +185,84 @@ def test_a_card_opens_the_panel_and_the_week_keeps_its_stacks_only_when_there_is
         page.locator(f"{STACKS} button[data-post-id]").first.click()
         page.locator("aside[data-post-panel]").wait_for(timeout=5_000)
         page.wait_for_timeout(300)
+        # (the sidebar is open here: the box is about 656 px, under the stacks threshold)
         assert page.locator("[data-week-stacks]").count() == 0, "bands expected beside the panel"
         current = page.locator("button[aria-current=true][data-post-id]")
         expect(current).to_have_count(1)
+    finally:
+        page.context.close()
+
+
+def test_the_week_keeps_seven_stacks_beside_the_panel_with_the_sidebar_collapsed(
+    browser: Any, site: tuple[str, str]
+) -> None:
+    page = week(browser, site)
+    try:
+        collapse(page)
+        page.locator(f"{STACKS} button[data-post-id]").first.click()
+        page.locator("aside[data-post-panel]").wait_for(timeout=5_000)
+        page.wait_for_timeout(450)
+        found = page.evaluate(STACK_JS)
+        assert len(found["stacks"]) == 7, (
+            "stacks expected beside the panel when the rail is collapsed"
+        )
+        assert min(s["w"] for s in found["stacks"]) >= 110, [s["w"] for s in found["stacks"]]
+        assert found["scroll"][0] <= found["scroll"][1], found["scroll"]
+        assert not any(c["over"] for c in found["cards"]), "a card passes its well"
+        assert not any(c["clipped"] for c in found["cards"]), "a card clips its content"
+        chips = page.evaluate(CARD_JS)  # the narrowest wells (about 100 px of card): still one line
+        assert all(c["chipH"] < 36 for c in chips if len(c["label"]) <= 14), chips
+        current = page.locator("button[aria-current=true][data-post-id]")
+        expect(current).to_have_count(1)
+    finally:
+        page.context.close()
+
+
+# -- card detail by well width (R-A 3, 4, 5) -------------------------------------------------
+
+CARD_JS = """() => [...document.querySelectorAll('[aria-label="Week calendar"] button[data-post-id]')].map((c) => {
+  const vis = (el) => !!el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().width > 0;
+  const chip = c.querySelector('[data-status]');
+  const icon = chip.querySelector('svg');
+  const end = c.querySelector('[data-card-end]');
+  return { w: c.getBoundingClientRect().width, chipH: chip.getBoundingClientRect().height, icon: vis(icon), label: chip.textContent,
+    end: vis(end) ? end.textContent.trim() : null, time: c.querySelector('[data-card-time]').textContent,
+    hyphens: getComputedStyle(c.querySelector('[data-card-title]')).hyphens,
+    badges: [...c.querySelectorAll('[data-badge]')].map((b) => ({ id: b.dataset.badge, visible: b.innerText.trim() })) };
+})"""
+
+
+def test_a_wide_card_prints_its_window_and_names_its_badges(
+    browser: Any, site: tuple[str, str]
+) -> None:
+    page = week(browser, site)
+    try:
+        cards = page.evaluate(CARD_JS)
+        assert cards and all(c["w"] >= 128 for c in cards), [c["w"] for c in cards]
+        for c in cards:
+            assert re.fullmatch(r"–\d\d:\d\d", c["end"] or ""), c
+            assert c["time"] and "–" not in c["time"], c  # the start time stays on its own
+            assert c["hyphens"] == "manual", c  # no automatic hyphenation
+        badges = [b for c in cards for b in c["badges"]]
+        assert badges, "the demo week has a card with a badge"
+        assert all(b["visible"] for b in badges), badges  # never an icon alone at this width
+    finally:
+        page.context.close()
+
+
+def test_a_narrow_card_keeps_one_line_chips_and_no_window(
+    browser: Any, site: tuple[str, str]
+) -> None:
+    page = week(browser, site, size=LAPTOP)  # 1024: the rail collapses by itself
+    try:
+        cards = page.evaluate(CARD_JS)
+        assert cards and all(c["w"] < 128 for c in cards), [c["w"] for c in cards]
+        for c in cards:
+            assert c["end"] is None, c  # "09:00" alone below 8 rem
+            assert not c["icon"], c  # the chip keeps its word and drops its icon
+            if len(c["label"]) <= 14:  # one line ("Awaiting you" no longer wraps); a long label may
+                assert c["chipH"] < 36, c
+            assert c["hyphens"] == "manual", c
     finally:
         page.context.close()
 
@@ -216,7 +291,9 @@ def test_month_rows_size_to_content_and_titles_wrap_instead_of_truncating(
         empty = [r["h"] for r in rows if r["posts"] == 0]
         busy = [r["h"] for r in rows if r["posts"] > 0]
         assert empty and busy, rows
-        assert max(empty) <= 100, empty  # an empty week is a quiet 96 px row, not 128
+        assert max(empty) <= 100, empty  # an empty week is a quiet row, not 128
+        assert min(empty) <= 70, empty  # an empty week that is not selected is 64 px (R-A 6)
+        assert rows[0]["h"] > 0, rows  # the first row stays on screen
         assert max(busy) > max(empty), rows  # a busy week is taller
         assert found["titles"], "no cards in the month"
         assert not any(t["truncated"] for t in found["titles"]), found["titles"]
