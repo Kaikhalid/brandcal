@@ -226,6 +226,9 @@ def test_dialogs_open_with_the_right_focus_and_say_what_they_do(
         text = dialog.inner_text()
         focused(page, focus)
         assert words in text
+        if action == "approve":  # the decision names the zone it is made in (R-A 2)
+            offset_seen = r"to be published .*\d\d:\d\d to \d\d:\d\d \([+-]\d\d:\d\d\)\."
+            assert re.search(offset_seen, text), text
         assert "Agent equivalent (CLI)" in text
         assert "This console action records channel console with your verified identity." in text
         assert dialog.locator("code[data-cli]").inner_text().startswith("brandcal")
@@ -277,7 +280,10 @@ def test_the_cli_line_has_a_copy_button_that_says_copied(
 ) -> None:
     page, problems = open_post(browser, site, new_post(home, "copy", "Copy check"))
     page.context.grant_permissions(["clipboard-read", "clipboard-write"])
-    row = page.locator('aside[data-post-panel] li[data-action="approve"]')
+    page.locator("aside[data-post-panel]").get_by_role(
+        "button", name="Agent equivalents (CLI)"
+    ).click()
+    row = page.locator('aside[data-post-panel] li[data-cli-for="approve"]')
     row.get_by_role("button", name="Copy the Approve command").click()
     expect(row.locator("[role=status]")).to_have_text("Copied")
     assert page.evaluate("navigator.clipboard.readText()").startswith("brandcal approve")
@@ -486,15 +492,18 @@ def test_disabled_actions_stay_visible_with_their_refusal(
 ) -> None:
     pid = pid_for(site, "Partner announcement")
     page, problems = open_post(browser, site, pid)
+    page.locator("aside[data-post-panel]").get_by_role(
+        "button", name="Agent equivalents (CLI)"
+    ).click()
     for action in ("edit", "cancel"):
         b = button(page, action)
         assert b.is_disabled()
         assert b.get_attribute("aria-disabled") == "true"
-        row = page.locator(f'aside[data-post-panel] li[data-action="{action}"]')
-        text = row.inner_text()
+        text = page.locator(f'aside[data-post-panel] li[data-action-note="{action}"]').inner_text()
         assert "EDIT_WHILE_CLAIMED" in text or "CLAIMED" in text
         assert "What to do:" in text
-        assert "Agent equivalent (CLI)" in text
+        cli = page.locator(f'aside[data-post-panel] li[data-cli-for="{action}"]')
+        assert "Agent equivalent (CLI)" in cli.inner_text()
     assert button(page, "note").is_enabled()
     clean(page, problems)
 
@@ -555,7 +564,8 @@ def test_the_dev_unverified_server_refuses_every_write(
     for i in range(buttons.count()):
         assert buttons.nth(i).is_disabled()
         assert buttons.nth(i).get_attribute("aria-disabled") == "true"
-    rows = page.locator("aside[data-post-panel] li[data-action]")
+    rows = page.locator("aside[data-post-panel] li[data-action-note]")
+    assert rows.count() == buttons.count()
     for i in range(rows.count()):
         assert "IDENTITY_UNVERIFIED" in rows.nth(i).inner_text()
         assert "What to do:" in rows.nth(i).inner_text()

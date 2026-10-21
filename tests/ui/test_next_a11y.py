@@ -477,8 +477,16 @@ def test_every_dialog_takes_focus_traps_it_and_returns_it(
         for key in ("Tab", "Shift+Tab"):
             for _ in range(25):
                 page.keyboard.press(key)
-                page.wait_for_timeout(30)  # focus guards hand focus back asynchronously
-                assert dialog.evaluate("(el) => el.contains(document.activeElement)"), key
+                # Focus guards hand focus back asynchronously; on a loaded CI runner that can take
+                # longer than one frame, so poll (up to 1 s) instead of a fixed 30 ms sleep.
+                for _ in range(20):
+                    page.wait_for_timeout(50)
+                    if dialog.evaluate("(el) => el.contains(document.activeElement)"):
+                        break
+                assert dialog.evaluate("(el) => el.contains(document.activeElement)"), (
+                    key,
+                    page.evaluate("document.activeElement.outerHTML.slice(0, 160)"),
+                )
         page.keyboard.press("Escape")
         expect(dialog).to_have_count(0)
         expect(button(page, action)).to_be_focused()
@@ -644,12 +652,16 @@ def test_the_now_line_sits_on_the_right_day_and_hour_and_is_hidden_from_assistiv
         assert page.locator("[data-now]").count() == 1
         label = day.locator(".sr-only", has_text="Now: 10:30")  # visually hidden, still read
         expect(label).to_have_count(1)
-        hour = page.evaluate(
-            "(() => { const l = document.querySelector('[data-now]');"
-            " const d = l.closest('section'); const px = d.getBoundingClientRect().height / 24;"
-            " return (l.getBoundingClientRect().top - d.getBoundingClientRect().top) / px; })()"
+        # The rule sits inside the stack, after every card that starts before 10:30 and before
+        # every card that starts after it.
+        order = page.evaluate(
+            "(() => { const l = document.querySelector('[data-now]'); const y = l.getBoundingClientRect().top;"
+            " return [...l.closest('section').querySelectorAll('button[data-post-id]')]"
+            ".map((b) => [b.dataset.start, b.getBoundingClientRect().top < y]); })()"
         )
-        assert abs(hour - 10.5) < 0.05, hour
+        assert order, "no cards on the day with the rule"
+        for start, above in order:
+            assert above == (start <= "10:30"), order
     finally:
         page.context.close()
 

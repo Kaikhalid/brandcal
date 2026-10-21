@@ -3,6 +3,7 @@
 import { Ban, Check, Copy, LoaderCircle } from "lucide-react"
 import * as React from "react"
 
+import { Disclosure } from "@/components/disclosure"
 import { ErrorPanel } from "@/components/error-panel"
 import { words } from "@/components/post-bits"
 import {
@@ -25,7 +26,7 @@ import type {
   Seen,
   WriteResult,
 } from "@/lib/api"
-import { dayLabel, spanOf } from "@/lib/time"
+import { dayLabel, spanOf, zoneOffset } from "@/lib/time"
 import { buildWindow, windowParts, type WindowParts } from "@/lib/window"
 import { cn } from "@/lib/utils"
 
@@ -80,11 +81,11 @@ function CliBlock({ cli, label }: { cli: string; label: string }) {
   }
   return (
     <div className="flex flex-col gap-1.5">
-      <p className="text-xs text-label">Agent equivalent (CLI)</p>
+      <p className="text-[0.8125rem] text-label">Agent equivalent (CLI)</p>
       <div className="flex items-start gap-2">
         <code
           data-cli
-          className="min-w-0 flex-1 rounded-control bg-muted px-3 py-2 font-mono text-xs leading-relaxed break-words"
+          className="min-w-0 flex-1 rounded-control bg-muted px-3 py-2 font-mono text-[0.8125rem] leading-relaxed break-words"
         >
           {cli}
         </code>
@@ -112,7 +113,7 @@ function CliBlock({ cli, label }: { cli: string; label: string }) {
           />
         </button>
       </div>
-      <span role="status" className="min-h-4 text-xs text-label">
+      <span role="status" className="min-h-4 text-[0.8125rem] text-label">
         {said}
       </span>
     </div>
@@ -150,7 +151,7 @@ function TextArea({ label, name, required, hint, defaultValue = "", rows = 3 }: 
         className="min-h-20 rounded-control border-control bg-surface px-3 py-2 text-sm dark:bg-surface"
       />
       {hint && (
-        <p id={`${id}-hint`} className="text-xs text-label">
+        <p id={`${id}-hint`} className="text-[0.8125rem] text-label">
           {hint}
         </p>
       )}
@@ -176,7 +177,7 @@ function Line({ label, name, required, hint, defaultValue = "" }: FieldProps) {
         className={cn(control, "h-10")}
       />
       {hint && (
-        <p id={`${id}-hint`} className="text-xs text-label">
+        <p id={`${id}-hint`} className="text-[0.8125rem] text-label">
           {hint}
         </p>
       )}
@@ -247,7 +248,7 @@ function MoveTo({
           />
         </div>
       </div>
-      <p className="text-xs text-label">
+      <p className="text-[0.8125rem] text-label">
         {zone ? `Day and times are in ${zone}.` : "Day and times use the offset of the current window."}
       </p>
       <div className="flex flex-col gap-2">
@@ -263,15 +264,15 @@ function MoveTo({
           onChange={(e) => setRaw(e.target.value)}
           spellCheck={false}
           aria-describedby={`${id}-hint`}
-          className={cn(control, "h-10 font-mono text-xs")}
+          className={cn(control, "h-10 font-mono text-[0.8125rem]")}
         />
-        <p id={`${id}-hint`} className="text-xs text-label">
+        <p id={`${id}-hint`} className="text-[0.8125rem] text-label">
           {[schema.time_format, hint].filter(Boolean).join(". ")}
         </p>
       </div>
       <p className="text-sm">
         The window that will be sent:{" "}
-        <code data-window-sent className="font-mono text-xs break-all">
+        <code data-window-sent className="font-mono text-[0.8125rem] break-all">
           {raw}
         </code>
       </p>
@@ -288,7 +289,10 @@ function saysFor(a: PostAction, post: PostDetail, schema: Schema): string {
   switch (a.id) {
     case "approve": {
       const when = post.window ? spanOf(post.window, schema.timezone) : null
-      return `Approve ${short(post)}${when ? `, to be published ${dayLabel(when.day)}, ${when.text}` : ""}. The post can then be published inside that window.`
+      const offset = post.window
+        ? zoneOffset(schema.timezone, new Date(post.window.split("/")[0]))
+        : null
+      return `Approve ${short(post)}${when ? `, to be published ${dayLabel(when.day)}, ${when.text}${offset ? ` (${offset})` : ""}` : ""}. The post can then be published inside that window.`
     }
     case "request-changes":
       return `Send ${short(post)} back to the writer. All three fields are required.`
@@ -542,27 +546,57 @@ export function Actions({ post, schema, host }: { post: PostDetail; schema: Sche
     host.opened()
   }
 
+  const notes = all.filter((a) => (a.warning && a.id === "edit") || a.refusal)
+
+  // Three parts, in this order: the buttons (pinned: sticky to the top of the panel's scroller, so
+  // Approve and the others are always in view), what stops or warns about an action, and the CLI
+  // lines behind a disclosure. The panel places them; they are siblings of its other sections.
   return (
     <>
-      <ul className="flex flex-col gap-7">
-        {all.map((a) => (
-          <li key={a.id} data-action={a.id} data-enabled={a.enabled} className="flex flex-col gap-3 text-sm">
-            <button
-              type="button"
-              data-action-button={a.id}
-              disabled={!a.enabled}
-              aria-disabled={a.enabled ? undefined : "true"}
-              onClick={() => start(a)}
-              className={cn(pill, "self-start", a.id === "approve" && a.enabled ? solid : outlined)}
-            >
-              {a.label}
-            </button>
-            {a.warning && a.id === "edit" && <p className="text-label">{a.warning}</p>}
-            {a.refusal && <ErrorPanel error={a.refusal} blocking={false} className="bg-muted shadow-none" />}
-            <CliBlock cli={a.cli} label={a.label} />
-          </li>
-        ))}
-      </ul>
+      <div
+        role="group"
+        aria-label="Actions"
+        data-panel-actions
+        className="sticky top-0 z-10 -mx-6 bg-glass-solid px-6 py-3 shadow-card"
+      >
+        <ul className="flex flex-wrap gap-2">
+          {all.map((a) => (
+            <li key={a.id} data-action={a.id} data-enabled={a.enabled}>
+              <button
+                type="button"
+                data-action-button={a.id}
+                disabled={!a.enabled}
+                aria-disabled={a.enabled ? undefined : "true"}
+                onClick={() => start(a)}
+                className={cn(pill, "min-h-10 px-4", a.id === "approve" && a.enabled ? solid : outlined)}
+              >
+                {a.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {notes.length > 0 && (
+        <ul className="flex flex-col gap-3 text-sm">
+          {notes.map((a) => (
+            <li key={a.id} data-action-note={a.id} className="flex flex-col gap-2">
+              {a.warning && a.id === "edit" && <p className="text-label">{a.warning}</p>}
+              {a.refusal && (
+                <ErrorPanel error={a.refusal} blocking={false} className="bg-muted shadow-none" />
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <Disclosure title="Agent equivalents (CLI)">
+        <ul className="flex flex-col gap-4">
+          {all.map((a) => (
+            <li key={a.id} data-cli-for={a.id}>
+              <CliBlock cli={a.cli} label={a.label} />
+            </li>
+          ))}
+        </ul>
+      </Disclosure>
       {dialog && (
         <ActionDialog
           key={dialog.n}

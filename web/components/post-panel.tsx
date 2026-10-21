@@ -6,11 +6,12 @@ import { Suspense } from "react"
 import { flushSync } from "react-dom"
 
 import { useAppData, type Loadable } from "@/components/app-data"
+import { Disclosure } from "@/components/disclosure"
 import { ErrorPanel } from "@/components/error-panel"
 import { useNotice } from "@/components/notice"
 import { PlatformBadge } from "@/components/platform-swatch"
 import { Actions, type ActionsHost } from "@/components/post-actions"
-import { PostBadges, TypeTag, takeOpener, words } from "@/components/post-bits"
+import { PostBadges, TypeTag, focusPostLater, takeOpener, words } from "@/components/post-bits"
 import { StatusChip } from "@/components/status-chip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useMedia } from "@/components/use-media"
@@ -26,7 +27,7 @@ import {
   type Version,
 } from "@/lib/api"
 import { diffLines } from "@/lib/diff"
-import { dayLabel, fullTime, spanOf, windowLabel, windowSpansDays } from "@/lib/time"
+import { dayLabel, fullTime, spanOf, windowLabel, windowSpansDays, zoneOffset } from "@/lib/time"
 import { useUrlState } from "@/lib/url-state"
 import { cn } from "@/lib/utils"
 
@@ -115,12 +116,12 @@ function Fingerprint({ hash }: { hash: string }) {
         onClick={copy}
         title={hash}
         aria-label={`Fingerprint ${hash.slice(0, 8)}. Copy the full hash`}
-        className="press inline-flex min-h-8 items-center gap-2 rounded-control border border-control px-2.5 font-mono text-xs hover:bg-muted"
+        className="press inline-flex min-h-8 items-center gap-2 rounded-control border border-control px-2.5 font-mono text-[0.8125rem] hover:bg-muted"
       >
         {hash.slice(0, 8)}
         <Copy aria-hidden="true" strokeWidth={1.5} className="size-4" />
       </button>
-      <span role="status" className="text-xs text-label">
+      <span role="status" className="text-[0.8125rem] text-label">
         {said}
       </span>
     </span>
@@ -138,7 +139,7 @@ function Text({ post, schema }: { post: PostDetail; schema: Schema }) {
         <pre className="rounded-control bg-muted p-3 font-sans text-sm leading-relaxed whitespace-pre-wrap">
           {part.text}
         </pre>
-        <p className="text-xs text-label tabular-nums">
+        <p className="text-[0.8125rem] text-label tabular-nums">
           {max !== null ? `${n} / ${max} characters` : `${n} characters`}
           {over && (
             <span className="ml-2 inline-flex items-center gap-1 font-medium text-destructive">
@@ -241,7 +242,7 @@ function History({ data, zone }: { data: Data; zone: string | null }) {
     (e) => e.action === "add" || e.action === "edit" || e.action === "media_add" || e.action.startsWith("part")
   )
   return (
-    <Section title="Version history">
+    <Disclosure title="Version history">
       <p className="text-sm">
         Now version {post.content_version}, fingerprint{" "}
         <code className="font-mono">{post.content_hash.slice(0, 8)}</code>
@@ -250,7 +251,7 @@ function History({ data, zone }: { data: Data; zone: string | null }) {
         {changes.map((e) => (
           <li key={e.id}>
             {words(e.action)} by {e.actor}
-            <span className="block text-xs text-label tabular-nums">{fullTime(e.at, zone)}</span>
+            <span className="block text-[0.8125rem] text-label tabular-nums">{fullTime(e.at, zone)}</span>
           </li>
         ))}
       </ul>
@@ -262,7 +263,7 @@ function History({ data, zone }: { data: Data; zone: string | null }) {
               <li key={a.id}>
                 <strong className="font-medium">{words(a.decision)}</strong> on version {a.content_version},
                 fingerprint <code className="font-mono">{a.content_hash.slice(0, 8)}</code>
-                <span className="block text-xs text-label tabular-nums">
+                <span className="block text-[0.8125rem] text-label tabular-nums">
                   {a.decided_by} via{" "}
                   {a.channel === "console" ? `console (verified: ${a.verified_identity})` : a.channel},{" "}
                   {fullTime(a.decided_at, zone)}
@@ -276,11 +277,11 @@ function History({ data, zone }: { data: Data; zone: string | null }) {
           </ul>
         </>
       )}
-    </Section>
+    </Disclosure>
   )
 }
 
-const flat = (v: Version) => [
+const flat =(v: Version) => [
   ...v.parts.flatMap((t, i) => [`Part ${i + 1}:`, ...t.split("\n")]),
   `First comment: ${v.first_comment ?? ""}`,
   `Target URL: ${v.target_url ?? ""}`,
@@ -293,9 +294,9 @@ function Compare({ versions }: { versions: Version[] }) {
   const select = "h-10 rounded-control border border-control bg-surface px-3 text-sm"
   if (versions.length < 2) {
     return (
-      <Section title="Compare versions">
+      <Disclosure title="Compare versions">
         <p className="text-sm text-label">Only one version exists, so there is nothing to compare.</p>
-      </Section>
+      </Disclosure>
     )
   }
   const find = (n: string) => versions.find((v) => String(v.version) === n) ?? versions[0]
@@ -306,7 +307,7 @@ function Compare({ versions }: { versions: Version[] }) {
     </option>
   ))
   return (
-    <Section title="Compare versions">
+    <Disclosure title="Compare versions">
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <select aria-label="Compare from" value={from} onChange={(e) => setFrom(e.target.value)} className={select}>
           {options}
@@ -316,7 +317,7 @@ function Compare({ versions }: { versions: Version[] }) {
           {options}
         </select>
       </div>
-      <pre aria-live="polite" data-diff className="overflow-x-auto rounded-control bg-muted py-2 font-mono text-xs leading-relaxed">
+      <pre aria-live="polite" data-diff className="overflow-x-auto rounded-control bg-muted py-2 font-mono text-[0.8125rem] leading-relaxed">
         {lines.map((l, i) => (
           <span
             key={i}
@@ -332,7 +333,7 @@ function Compare({ versions }: { versions: Version[] }) {
           </span>
         ))}
       </pre>
-    </Section>
+    </Disclosure>
   )
 }
 
@@ -346,7 +347,7 @@ function identityTag(detail: unknown): string | null {
 
 function Audit({ events, zone }: { events: EventRow[]; zone: string | null }) {
   return (
-    <Section title="Audit trail">
+    <Disclosure title="Audit trail">
       <ol className="flex flex-col gap-3 text-sm">
         {events.map((e) => {
           const tag = identityTag(e.detail)
@@ -356,7 +357,7 @@ function Audit({ events, zone }: { events: EventRow[]; zone: string | null }) {
               {e.from_status && e.to_status && e.from_status !== e.to_status
                 ? `: ${words(e.from_status)} to ${words(e.to_status)}`
                 : ""}
-              <span className="block text-xs text-label tabular-nums">
+              <span className="block text-[0.8125rem] text-label tabular-nums">
                 {fullTime(e.at, zone)}
                 {tag ? `, ${tag}` : ""}
               </span>
@@ -365,7 +366,7 @@ function Audit({ events, zone }: { events: EventRow[]; zone: string | null }) {
           )
         })}
       </ol>
-    </Section>
+    </Disclosure>
   )
 }
 
@@ -373,6 +374,7 @@ function Body({ data, schema, host }: { data: Data; schema: Schema; host: Action
   const { post } = data
   const zone = schema.timezone
   const w = post.window ? spanOf(post.window, zone) : null
+  const offset = post.window ? zoneOffset(zone, new Date(post.window.split("/")[0])) : null
   return (
     <div className="flex flex-col gap-7">
       <div className="flex flex-wrap items-center gap-2">
@@ -381,11 +383,13 @@ function Body({ data, schema, host }: { data: Data; schema: Schema; host: Action
         <TypeTag type={post.post_type} />
         <PostBadges post={post} />
       </div>
+      {/* Actions first: pinned under the status, so Approve is in view on open and stays there. */}
+      <Actions post={post} schema={schema} host={host} />
       <Rows
         rows={[
           ["Post", <code key="p" className="font-mono">{post.id}</code>],
           ["Slug", <code key="s" className="font-mono">{post.slug}</code>],
-          ["When", w && `${dayLabel(w.day)}, ${w.text}`],
+          ["When", w && `${dayLabel(w.day)}, ${w.text}${offset ? ` (${offset})` : ""}`],
           [
             "Window",
             // A same-day window reads exactly like "When"; show the row only when it adds an end day.
@@ -405,9 +409,6 @@ function Body({ data, schema, host }: { data: Data; schema: Schema; host: Action
       <History data={data} zone={zone} />
       <Compare versions={data.versions} />
       <Audit events={data.events} zone={zone} />
-      <Section title="Actions">
-        <Actions post={post} schema={schema} host={host} />
-      </Section>
     </div>
   )
 }
@@ -499,19 +500,27 @@ function Panel({ id }: { id: string }) {
     const behind = document.getElementById("shell-body")
     if (behind) behind.inert = false
     const back = takeOpener()
-    const target =
-      back && document.contains(back) ? back : document.querySelector<HTMLElement>("main h1")
-    if (target) {
-      if (!target.hasAttribute("tabindex") && target.tagName === "H1") target.tabIndex = -1
-      target.focus({ preventScroll: true })
+    if (back && document.contains(back)) {
+      back.focus({ preventScroll: true })
+    } else if (document.querySelector(`button[data-post-id="${id}"]`)) {
+      // The calendar re-lays itself out when the panel closes; focus the post once it has.
+      focusPostLater(id)
+    } else {
+      const heading = document.querySelector<HTMLElement>("h1")
+      if (heading) {
+        if (!heading.hasAttribute("tabindex")) heading.tabIndex = -1
+        heading.focus({ preventScroll: true })
+      }
     }
-  }, [set])
+  }, [set, id])
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // Esc inside a confirm dialog closes only the dialog, never the panel behind it.
       const inDialog = e.target instanceof Element && e.target.closest('[role="dialog"], [role="alertdialog"]')
-      if (e.key === "Escape" && !e.defaultPrevented && !inDialog) close()
+      // Nor while a popover or menu (Filters, theme) is open: Esc closes that first.
+      const floating = document.querySelector("[data-slot='popover-content'][data-open], [data-slot='dropdown-menu-content'][data-open]")
+      if (e.key === "Escape" && !e.defaultPrevented && !inDialog && !floating) close()
     }
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
