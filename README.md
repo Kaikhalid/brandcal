@@ -3,8 +3,7 @@
 A generic, open-source command-line tool and SQLite library for AI agents that manage a
 **human-approved** social media content calendar.
 
-> **Status:** early development (v0.x). Not yet usable. Interfaces, schema and error codes
-> will change until v1.0.
+> **Status:** early release (v0.x), under active development. Interfaces, schema and error codes may change before v1.0.
 
 ## What it is
 
