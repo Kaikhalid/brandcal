@@ -1,8 +1,9 @@
 // The Durable Object "Relay": one instance, holding the connector's WebSocket (Hibernation API
 // only: no ws.accept(), no alarms, no idle timers) and the browser requests in flight on it.
 //
-// Per-socket state lives in the socket's attachment so it survives hibernation. Streams are in
-// memory only, which is safe because a Durable Object is not evicted while a request is in flight.
+// Per-socket state, including the stream id counter, lives in the socket's attachment so it
+// survives hibernation. Streams themselves are in memory only, which is safe because a Durable
+// Object is not evicted while a request is in flight.
 // The few timers below each belong to one request in flight and are cleared when it ends.
 
 import { DurableObject } from "cloudflare:workers";
@@ -62,6 +63,8 @@ interface Attachment {
   /** When it authenticated. */
   since: number | null;
   agent: string | null;
+  /** Next stream id for this socket; starts at 1 and survives hibernation. */
+  nextId: number;
 }
 
 interface Stream {
@@ -106,7 +109,6 @@ export class Relay extends DurableObject<Env> {
   /** Public so that tests can shorten them; production keeps the defaults. */
   limits: Limits = { ...DEFAULT_LIMITS };
   private streams = new Map<number, Stream>();
-  private nextId = 1;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -156,6 +158,7 @@ export class Relay extends DurableObject<Env> {
       authed: false,
       since: null,
       agent: null,
+      nextId: 1,
     };
     server.serializeAttachment(att);
     return new Response(null, {
@@ -424,8 +427,9 @@ export class Relay extends DurableObject<Env> {
     if (this.streams.size >= this.limits.maxStreams) return done(PROBLEMS.busy, "busy");
 
     const body = new Uint8Array(await request.arrayBuffer());
-    const id = this.nextId;
-    this.nextId = id >= 0xffffffff ? 1 : id + 1;
+    const id = link.att.nextId;
+    link.att.nextId = id >= 0xffffffff ? 1 : id + 1;
+    link.ws.serializeAttachment(link.att);
     let frame: Uint8Array;
     try {
       const headers = requestHeaders(request.headers, this.env.PUBLIC_HOST);
