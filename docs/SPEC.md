@@ -139,7 +139,8 @@ test or a stray command can never touch a real calendar by accident. Missing: ex
 - **UTC copies.** The database keeps generated UTC columns (`window_start_utc`,
   `window_end_utc`) for sorting and comparisons; they are never written by hand.
 - **Windows.** Start must be before end; both ends must fall on the same local date. Every
-  post must have a window before it can be approved (legacy imported rows excepted, SPEC 12).
+  post must have a window before it can be approved (legacy imported rows may have a null
+  window, SPEC 12).
 - **Local date and month.** "Today", "this week" and "this month" are computed in the display
   timezone. The month boundary used by the archive is local midnight on the 1st: with
   `+03:00`, `2026-11-01T01:00:00+03:00` belongs to November even though it is still
@@ -171,7 +172,7 @@ CREATE TABLE posts (
   status        TEXT NOT NULL DEFAULT 'pending_approval' CHECK (status IN
                 ('pending_approval','changes_requested','approved','missed','published','cancelled')),
   owner         TEXT NOT NULL REFERENCES agents(id),
-  window        TEXT,                             -- ISO interval; NULL only for legacy published rows
+  window        TEXT,                             -- ISO interval; NULL only for legacy imported rows
   window_start_utc TEXT GENERATED ALWAYS AS (datetime(substr(window, 1, instr(window,'/') - 1))) STORED,
   window_end_utc   TEXT GENERATED ALWAYS AS (datetime(substr(window, instr(window,'/') + 1))) STORED,
   series_id     TEXT, series_pos INTEGER,
@@ -190,10 +191,11 @@ CREATE TABLE posts (
   cancel_kind   TEXT CHECK (cancel_kind IN ('idea','version','plan')),
   notes         TEXT,
   legacy_id     TEXT UNIQUE,
+  extras        TEXT,                             -- JSON; v1 originals and unknown fields (SPEC 12)
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL, closed_at TEXT,
   CHECK (window GLOB '????-??-??T??:??:??[+-]??:??/????-??-??T??:??:??[+-]??:??'),
   CHECK (window_end_utc > window_start_utc),
-  CHECK (window IS NOT NULL OR (legacy_id IS NOT NULL AND status = 'published')),
+  CHECK (window IS NOT NULL OR legacy_id IS NOT NULL),
   CHECK (post_type <> 'comment' OR (delegation_msg_id IS NOT NULL AND delegation_words IS NOT NULL)),
   CHECK (post_type NOT IN ('comment','reshare') OR target_url IS NOT NULL),
   CHECK ((status = 'cancelled') = (cancel_kind IS NOT NULL)),
@@ -735,24 +737,34 @@ Every routine starts with `brandcal sweep`.
 ## 12. Migration from a v1 JSON calendar
 
 `brandcal migrate FILE --dry-run` prints a JSON report and writes nothing; without
-`--dry-run` it imports. Rerunning skips rows whose `legacy_id` already exists.
+`--dry-run` it imports. Rerunning skips rows whose `legacy_id` already exists. Every known
+field is kept, either in a first-class column or in `posts.extras`. Unknown fields go into
+`extras.unknown` and are listed in the report; a value that cannot be stored as JSON fails
+the migration (exit 2, `BAD_ARGS`). Nothing is dropped silently.
 
-**v1 format** (see `examples/v1_calendar.example.json`): a JSON object with `items`, each
-having `id`, `platform`, `status` (`idea`, `draft`, `approved`, `posted`, `skipped`), optional
-`date` (`YYYY-MM-DD`), `window` (`HH:MM-HH:MM` local, or empty), `title`, `body` (a thread may
-be one body with `1/`, `2/` … markers), `assets` (paths), `approved_on`, `posted_at` (in one
-of `YYYY-MM-DD`, `YYYY-MM-DDTHH:MM`, or full ISO with offset), `url`, `notes`.
+**v1 format** (see `examples/v1_calendar.example.json` and the synthetic fixture in
+`tests/fixtures/v1_team_shaped.json`): a JSON array of items, or a JSON object with an
+`items` list. Each item has `id`, `platform`, `status` (`idea`, `draft`, `approved`,
+`posted`, `skipped`), optional `date` (`YYYY-MM-DD`), `window` (`HH:MM-HH:MM` local, or
+empty), `title`, `body` (a thread may be one body with `1/`, `2/` … markers),
+`first_comment`, `assets` (paths), `approved_on`, `posted_at` (in one of `YYYY-MM-DD`,
+`YYYY-MM-DDTHH:MM`, or full ISO with offset), `url` and/or `posted_url` (the two are
+aliases; if both are non-empty and differ, the migration fails), and `notes`.
 
 | v1 | v2 |
 |---|---|
-| `posted` | `published` (closed), `legacy_id` kept, approval with `channel = 'legacy'` (unverified); `posted_at` normalised using the display timezone; missing URL listed in the report as a task |
-| `approved`, not yet posted | `pending_approval` with a proper window; needs fresh approval |
-| `idea`, `draft` | not imported; written to an output file for the writer |
+| `posted` | `published` (closed), `legacy_id` kept, approval with `channel = 'legacy'` (unverified); `posted_at` normalised using the display timezone; if `posted_at` is empty the date at local midnight is used and listed in `missing_posted_at`; missing URL listed in `missing_url` |
+| `approved`, not yet posted | `pending_approval`; needs a fresh approval. `approved_on` is kept in `extras` |
+| `idea`, `draft` | `pending_approval`; the original status is kept in `extras.v1_status` |
 | `skipped` | `cancelled`, `cancel_kind = 'plan'` |
-| thread body with `1/` … markers | split into parts |
-| `.md` assets | `source_doc`, not media |
-| `HH:MM-HH:MM` with `date` | ISO interval in the display timezone |
-| empty window | allowed only on imported published rows |
+| `posted_url` | treated as `url` and stored in `platform_url` |
+| `first_comment` | `posts.first_comment` |
+| thread body with `1/` … markers | split into parts; the original body is also kept in `extras.body` |
+| empty body | stored as an empty part; the title is not copied into the body |
+| `.md` assets | first path becomes `source_doc`; every path is kept in `extras.assets`. Image paths are also listed in `assets_to_add` and are not ingested as media |
+| `HH:MM-HH:MM` with `date` | ISO interval in the display timezone; the original strings stay in `extras` |
+| empty window or date | a null window is allowed on any legacy imported row; pending_approval rows without a window are listed in `needs_window` |
+| unknown fields | `extras.unknown`, and listed in `unknown_fields` |
 | ids | new `pNNNN` ids; old ids kept in `legacy_id` |
 
 ---

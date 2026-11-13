@@ -106,7 +106,7 @@ def version(conn: sqlite3.Connection) -> int:
 def test_fresh_init_lands_on_latest(tmp_path: Path, tz: object) -> None:
     conn = open_db(tmp_path / "brand.db", tz)  # type: ignore[arg-type]
     init_db(conn, UI_AGENTS, PLATFORMS)
-    assert LATEST == 2 and version(conn) == LATEST
+    assert LATEST == 3 and version(conn) == LATEST
     init_db(conn, UI_AGENTS, PLATFORMS)  # safe to repeat
     assert version(conn) == LATEST
     conn.close()
@@ -134,6 +134,8 @@ def test_migration_keeps_rows_ids_and_triggers(tmp_path: Path, tz: object) -> No
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
     row = conn.execute("SELECT verified_identity, identity_source FROM approvals WHERE id = 1")
     assert tuple(row.fetchone()) == (None, None)
+    extras = [r[0] for r in conn.execute("SELECT extras FROM posts ORDER BY id")]
+    assert extras == [None, None]
     # The migrated database still enforces its rules and accepts a console approval.
     with pytest.raises(sqlite3.DatabaseError, match="APPEND_ONLY"):
         conn.execute("UPDATE approvals SET approver_words = 'x' WHERE id = 1")
