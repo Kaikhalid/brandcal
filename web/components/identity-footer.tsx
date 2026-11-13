@@ -3,6 +3,7 @@
 import { UserRound } from "lucide-react"
 
 import { useAppData } from "@/components/app-data"
+import { ThemeMenu } from "@/components/theme-menu"
 import { ThemeSwitcher } from "@/components/theme-switcher"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -56,7 +57,7 @@ function IdentityFooter() {
           <p className="truncate text-[0.8125rem] text-label">{detail}</p>
         </div>
       </div>
-      <div className="hidden justify-center group-data-[collapsible=icon]:flex">
+      <div className="hidden flex-col items-center gap-2 group-data-[collapsible=icon]:flex">
         <Tooltip>
           <TooltipTrigger
             aria-label={`Signed in as ${summary}`}
@@ -67,6 +68,7 @@ function IdentityFooter() {
           </TooltipTrigger>
           <TooltipContent side="right">{summary}</TooltipContent>
         </Tooltip>
+        <ThemeMenu />
       </div>
       <ThemeSwitcher compact className="group-data-[collapsible=icon]:hidden" />
     </div>

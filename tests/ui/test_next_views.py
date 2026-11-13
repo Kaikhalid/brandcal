@@ -111,23 +111,32 @@ def test_panel_loads_clean_in_both_themes(browser: Any, site: tuple[str, str], s
         panel = page.get_by_role("complementary", name="Spring launch thread")
         assert panel.is_visible()
         text = panel.inner_text()
-        for needle in ("Part 1 of 3", "/ 280 characters", "Agent equivalent (CLI)", "Audit trail"):
+        for needle in ("Part 1 of 3", "/ 280 characters", "Agent equivalents (CLI)", "Audit trail"):
             assert needle in text, needle
     finally:
         page.context.close()
 
 
-def test_the_week_places_a_post_on_its_day_and_hour(browser: Any, site: tuple[str, str]) -> None:
+def test_the_week_places_a_post_in_its_days_stack_in_time_order(
+    browser: Any, site: tuple[str, str]
+) -> None:
     page, _ = load(browser, site, "calendar-week", "light")
     try:
         pid = post_id(page, "Planning day at Example Co")  # Tuesday, 10:00 to 11:00
-        block = page.locator(f'button[data-post-id="{pid}"]')
-        assert block.get_attribute("data-day") == TUESDAY
-        assert block.get_attribute("data-start") == "10:00"
-        column = page.locator(f'section[data-day="{TUESDAY}"]')
-        offset = block.bounding_box()["y"] - column.bounding_box()["y"]  # type: ignore[index]
-        assert abs(offset - 10 * 144) <= 3, offset  # 9rem per hour
-        assert "10:00 to 11:00" in block.inner_text()
+        card = page.locator(f'button[data-post-id="{pid}"]')
+        assert card.get_attribute("data-day") == TUESDAY
+        assert card.get_attribute("data-start") == "10:00"
+        stack = page.locator(f'section[data-day="{TUESDAY}"]')
+        assert stack.locator(f'button[data-post-id="{pid}"]').count() == 1
+        # No hour axis: the card sits at the top of its stack, ordered by start time.
+        starts = stack.locator("button[data-post-id]").evaluate_all(
+            "els => els.map(e => [e.dataset.start, e.getBoundingClientRect().top])"
+        )
+        assert [s for s, _ in starts] == sorted(s for s, _ in starts), starts
+        assert [y for _, y in starts] == sorted(y for _, y in starts), starts
+        assert "10:00" in card.inner_text()
+        # The tooltip carries the whole window with the zone offset (S10).
+        assert re.search(r"10:00 to 11:00 \([+-]\d\d:\d\d\)", card.get_attribute("title") or "")
         heading = page.get_by_role("heading", level=1).inner_text()
         assert "9 – 15 March 2026" in heading
     finally:
@@ -151,25 +160,27 @@ def test_the_month_view_shows_posts_and_the_week_navigates(
         page.context.close()
 
 
-def test_a_filter_pill_sets_the_url_and_aria_pressed(browser: Any, site: tuple[str, str]) -> None:
+def test_a_platform_checkbox_in_the_filters_popover_sets_the_url(
+    browser: Any, site: tuple[str, str]
+) -> None:
     page, _ = load(browser, site, "calendar-week", "light")
     try:
-        pill = page.locator('[data-filter="platform:linkedin"]')
+        page.locator("[data-filters-toggle]").click()
+        box = page.locator('[data-filter="platform:linkedin"]')
         before = page.locator("[data-post-id]").count()
-        assert pill.get_attribute("aria-pressed") == "false"
-        pill.click()
+        assert not box.is_checked()
+        box.click()  # the URL is the state, so the box ticks a moment after the click
         page.wait_for_url(re.compile("platform=linkedin"))
-        expect(pill).to_have_attribute("aria-pressed", "true")
+        expect(box).to_be_checked()
         expect(page.locator("[data-post-id]")).not_to_have_count(before)
         platforms = page.locator("[data-post-id] [data-platform]").evaluate_all(
             "els => [...new Set(els.map(e => e.dataset.platform))]"
         )
         assert platforms == ["linkedin"], platforms
         assert page.locator("[data-post-id]").count() < before
-        pill.click()
-        expect(pill).to_have_attribute("aria-pressed", "false")
+        box.click()
+        expect(box).not_to_be_checked()
         assert "platform=" not in page.url
-        page.get_by_role("button", name="More filters").click()
         page.get_by_label("Search by slug").fill("launch-thread")
         page.wait_for_url(re.compile("q=launch-thread"))
         expect(page.locator("[data-post-id]")).to_have_count(1)
@@ -210,7 +221,8 @@ def test_from_1200px_the_panel_sits_beside_the_content(browser: Any, site: tuple
         assert main and panel and main["x"] + main["width"] <= panel["x"] + 1
         page.get_by_role("button", name="Close panel").click()
         page.locator("aside").wait_for(state="detached")
-        assert page.evaluate("document.activeElement.dataset.postId") == pid
+        # The calendar swaps bands for columns as the panel leaves, so the opener is new.
+        until(page, f"document.activeElement?.dataset.postId === '{pid}'")
     finally:
         page.context.close()
 
@@ -237,6 +249,9 @@ def test_the_panel_diffs_two_versions_with_signs_and_shows_media(
     try:
         pid = post_id(page, "Planning day at Example Co")
         page.locator(f'button[data-post-id="{pid}"]').click()
+        # History, Compare and the CLI lines are disclosures, closed on open.
+        page.locator("aside").get_by_role("button", name="Compare versions").click()
+        page.locator("aside").get_by_role("button", name="Agent equivalents (CLI)").click()
         diff = page.locator("aside [data-diff]")
         diff.wait_for()
         added = diff.locator("[data-sign=add]")
@@ -248,7 +263,8 @@ def test_the_panel_diffs_two_versions_with_signs_and_shows_media(
         assert image.get_attribute("alt", timeout=5_000)
         assert "Alt text:" in page.locator("aside figure figcaption").inner_text()
         page.get_by_role("button", name=re.compile("^Fingerprint")).click()
-        expect(page.locator("aside [role=status]").first).to_contain_text(re.compile("Cop|copy"))
+        said = page.locator("aside [role=status]").filter(has_text=re.compile("Copied|copy"))
+        expect(said).to_have_count(1)
         wanted = page.evaluate(
             "async id => { const p = await (await fetch('/api/posts/' + id)).json();"
             " return [...p.actions, p.note].filter(Boolean).map(a => [a.id, a.cli]); }",
@@ -256,7 +272,7 @@ def test_the_panel_diffs_two_versions_with_signs_and_shows_media(
         )
         assert len(wanted) >= 3
         for action, cli in wanted:  # each action: a button (N3) and its exact CLI line
-            assert page.locator(f'aside [data-action="{action}"] code').inner_text() == cli
+            assert page.locator(f'aside [data-cli-for="{action}"] code').inner_text() == cli
             assert page.locator(f'aside [data-action-button="{action}"]').count() == 1
     finally:
         page.context.close()
@@ -361,7 +377,8 @@ def test_the_views_fit_small_screens(
         assert not problems, problems
         if view.startswith("calendar") and size is PHONE:
             assert page.locator("h3[aria-current=date], section[data-day] h3").count() >= 1
-            assert page.locator("[role=region][aria-label='Week calendar']").count() == 0
+            # Day bands, not columns: the region holds sections, never the seven stacks.
+            assert page.locator("[aria-label='Week calendar'] [data-week-stacks]").count() == 0
         # No page-wide sideways scroll; only the grid or table scrolls itself.
         offenders = page.evaluate(
             "[...document.querySelectorAll('body *')].filter(e => !e.closest('[role=region]')"
@@ -391,7 +408,9 @@ def test_the_panel_hides_a_same_day_window_that_repeats_when(
     try:
         wait_drawn(page, "aside[data-post-panel] pre")
         when = page.locator("aside[data-post-panel] dt:text-is('When') + dd")
-        assert re.fullmatch(r"Tue \d{1,2} [A-Z][a-z]{2}, 10:00 to 11:00", when.inner_text().strip())
+        # The offset is printed where the decision is made (R-A 2), e.g. "(+01:00)".
+        shown = when.inner_text().strip()
+        assert re.fullmatch(r"Tue \d{1,2} [A-Z][a-z]{2}, 10:00 to 11:00 \([+-]\d\d:\d\d\)", shown)
         assert page.locator("aside[data-post-panel] dt:text-is('Window')").count() == 0
         assert not problems, problems
     finally:

@@ -69,6 +69,25 @@ export function localParts(iso: string, zone: string | null): Local {
   }
 }
 
+/** The UTC offset of `zone` ("+03:00") for the context strip; null when there is no zone. The
+ *  zone is the configured one (schema.timezone), never a default. */
+export function zoneOffset(zone: string | null, at: Date = new Date()): string | null {
+  if (zone === null) return null
+  const fixed = offsetMinutes(zone)
+  if (fixed !== null) {
+    const sign = fixed < 0 ? "-" : "+"
+    return `${sign}${pad(Math.floor(Math.abs(fixed) / 60))}:${pad(Math.abs(fixed) % 60)}`
+  }
+  try {
+    const name = new Intl.DateTimeFormat("en-GB", { timeZone: zone, timeZoneName: "longOffset" })
+      .formatToParts(at)
+      .find((p) => p.type === "timeZoneName")?.value
+    return name === "GMT" ? "+00:00" : (name?.replace("GMT", "") ?? null)
+  } catch {
+    return null
+  }
+}
+
 export const clock = (t: Local) => `${pad(t.h)}:${pad(t.mi)}`
 export const dateKey = (t: Local) => `${t.y}-${pad(t.mo)}-${pad(t.d)}`
 export const parseDate = (key: string): [number, number, number] => {
@@ -128,6 +147,18 @@ export function rangeLabel(view: View, date: string): string {
   return fm === tm
     ? `${fd} – ${td} ${MONTHS[tm - 1]} ${ty}`
     : `${fd} ${MONTHS[fm - 1].slice(0, 3)} – ${td} ${MONTHS[tm - 1].slice(0, 3)} ${ty}`
+}
+
+/** The phone's title: "9 – 15 Mar", "30 Mar – 5 Apr", "Mar 2026" (the full label stays for readers). */
+export function rangeLabelShort(view: View, date: string): string {
+  const [y, m] = parseDate(date)
+  if (view === "month") return `${MONTHS[m - 1].slice(0, 3)} ${y}`
+  const [from, to] = rangeFor("week", date)
+  const [, fm, fd] = parseDate(from)
+  const [, tm, td] = parseDate(to)
+  return fm === tm
+    ? `${fd} – ${td} ${MONTHS[tm - 1].slice(0, 3)}`
+    : `${fd} ${MONTHS[fm - 1].slice(0, 3)} – ${td} ${MONTHS[tm - 1].slice(0, 3)}`
 }
 
 export type Span = {
