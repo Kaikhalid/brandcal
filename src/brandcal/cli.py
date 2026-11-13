@@ -296,6 +296,8 @@ def build_parser() -> argparse.ArgumentParser:
     migrate_p.add_argument("--dry-run", action="store_true")
     migrate_p.add_argument("--out")
     migrate_p.add_argument("--owner")
+    migrate_p.add_argument("--legacy-approved", action="store_true")
+    migrate_p.add_argument("--legacy-approved-words")
     return parser
 
 
@@ -689,6 +691,8 @@ def cmd_migrate(args: argparse.Namespace) -> dict[str, object]:
             dry_run=args.dry_run,
             out=Path(args.out) if args.out else None,
             owner=args.owner,
+            keep_approved=args.legacy_approved,
+            approved_words=args.legacy_approved_words,
         )
         return out
 

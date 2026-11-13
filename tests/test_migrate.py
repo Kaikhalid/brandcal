@@ -523,3 +523,72 @@ def test_twenty_nine_item_bare_array_all_import(
     for original in items:
         assert _reconstruct(rows[original["id"]]) == original
     conn.close()
+
+
+def test_legacy_approved_imports_as_approved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    home = setup_home(tmp_path, monkeypatch)
+    path = v1_file(
+        tmp_path,
+        item(
+            id="a1",
+            status="approved",
+            approved_on="2026-10-28",
+            posted_at="",
+            url="",
+            notes="Keep this note.",
+        ),
+        item(id="d1", status="draft", posted_at="", url="", window=""),
+    )
+    code, out = migrate_cli(
+        capsys,
+        path,
+        "--legacy-approved",
+        "--legacy-approved-words",
+        "legacy import: Kai approved; Kay relayed. KB record: example.",
+    )
+    assert code == 0
+    assert {i["legacy_id"]: i["status"] for i in out["imported"]} == {
+        "a1": "approved",
+        "d1": "pending_approval",
+    }
+    conn = db_of(home)
+    post = conn.execute("SELECT * FROM posts WHERE legacy_id = 'a1'").fetchone()
+    assert post["status"] == "approved" and post["closed_at"] is None
+    assert post["notes"] == "Keep this note."
+    assert json.loads(post["extras"])["v1_status"] == "approved"
+    app = conn.execute("SELECT * FROM approvals WHERE post_id = ?", (post["id"],)).fetchone()
+    assert app["channel"] == "legacy" and app["decision"] == "approve"
+    assert app["approver_words"] == (
+        "legacy import: Kai approved; Kay relayed. KB record: example."
+    )
+    assert app["decided_at"] == "2026-10-28T00:00:00+03:00"
+    assert (app["decided_by"], app["relayed_by"], app["recorded_by"]) == (
+        "approver-1",
+        "manager-1",
+        "manager-1",
+    )
+    draft = conn.execute("SELECT status FROM posts WHERE legacy_id = 'd1'").fetchone()
+    assert draft[0] == "pending_approval"
+    assert (
+        conn.execute("SELECT COUNT(*) FROM approvals WHERE post_id = ?", (draft[0],)).fetchone()
+        is not None
+    )
+    assert (
+        conn.execute(
+            "SELECT COUNT(*) FROM approvals a JOIN posts p ON p.id = a.post_id"
+            " WHERE p.legacy_id = 'd1'"
+        ).fetchone()[0]
+        == 0
+    )
+    conn.close()
+
+
+def test_legacy_approved_words_requires_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    setup_home(tmp_path, monkeypatch)
+    path = v1_file(tmp_path, item(status="approved", posted_at="", url=""))
+    code, out = migrate_cli(capsys, path, "--legacy-approved-words", "nope")
+    assert code == 2 and out["error"]["code"] == "BAD_ARGS"

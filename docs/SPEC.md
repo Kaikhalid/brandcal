@@ -546,7 +546,7 @@ Proposed amendment: a `console` channel, where the server records a verified hum
 | `archive run [--month YYYY-MM] [--dry-run]` | SPEC 10 | admin, system |
 | `archive list/show/search/stats --month YYYY-MM …` | Read archive files (read-only) | all |
 | `init` | Create `brand.db` from the schema; seed transitions, agents and platforms from config (re-running only adds missing agents and platforms) | admin |
-| `migrate FILE [--dry-run]` | Import a v1 JSON calendar (SPEC 12) | admin |
+| `migrate FILE [--dry-run] [--legacy-approved]` | Import a v1 JSON calendar (SPEC 12) | admin |
 
 Identity: every write needs `--as NAME` or `BRANDCAL_AGENT`, naming an agent in the agents
 table. Self-declared; every event names its actor.
@@ -737,7 +737,9 @@ Every routine starts with `brandcal sweep`.
 ## 12. Migration from a v1 JSON calendar
 
 `brandcal migrate FILE --dry-run` prints a JSON report and writes nothing; without
-`--dry-run` it imports. Rerunning skips rows whose `legacy_id` already exists. Every known
+`--dry-run` it imports. With `--legacy-approved`, a v1 `approved` row is imported as
+`approved` with a `channel = 'legacy'` approval (optional `--legacy-approved-words`);
+otherwise it stays `pending_approval` and needs a fresh approval. Rerunning skips rows whose `legacy_id` already exists. Every known
 field is kept, either in a first-class column or in `posts.extras`. Unknown fields go into
 `extras.unknown` and are listed in the report; a value that cannot be stored as JSON fails
 the migration (exit 2, `BAD_ARGS`). Nothing is dropped silently.
@@ -754,7 +756,7 @@ aliases; if both are non-empty and differ, the migration fails), and `notes`.
 | v1 | v2 |
 |---|---|
 | `posted` | `published` (closed), `legacy_id` kept, approval with `channel = 'legacy'` (unverified); `posted_at` normalised using the display timezone; if `posted_at` is empty the date at local midnight is used and listed in `missing_posted_at`; missing URL listed in `missing_url` |
-| `approved`, not yet posted | `pending_approval`; needs a fresh approval. `approved_on` is kept in `extras` |
+| `approved`, not yet posted | `pending_approval` by default, needing a fresh approval; with `--legacy-approved`, imported as `approved` with a legacy approval. `approved_on` is kept in `extras` |
 | `idea`, `draft` | `pending_approval`; the original status is kept in `extras.v1_status` |
 | `skipped` | `cancelled`, `cancel_kind = 'plan'` |
 | `posted_url` | treated as `url` and stored in `platform_url` |
