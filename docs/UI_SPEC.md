@@ -221,6 +221,7 @@ override `serve.port`):
 | `serve.approvers` | `{"approver@example.com": "approver-1"}`; the agent must have role `approver` |
 | `serve.viewers` | List of emails with read-only access |
 | `serve.console_agent` | Id of the recorder agent for console decisions (role `system`, seeded by `init`) |
+| `serve.console_approvals` | If and only if JSON `true`, a verified approver may record a console decision in the web UI. Missing, `false`, or any other value leaves the channel off. Off by default. |
 
 ### 2.7 HTTP hardening
 
@@ -255,6 +256,10 @@ override `serve.port`):
 ---
 
 ## 3. Approvals from the console
+
+The `console` channel is implemented, but a console Approve does not count as the owner's
+approval until `serve.console_approvals` is `true` in `config.json`. The flag is off by
+default; the owner turns it on deliberately.
 
 ### 3.1 The new channel
 

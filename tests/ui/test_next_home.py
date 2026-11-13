@@ -22,7 +22,7 @@ sync_api = pytest.importorskip("playwright.sync_api")
 pytest.importorskip("cryptography")
 
 from jwt_env import AUD, TEAM, FakeJwks, Signer, claims  # noqa: E402
-from test_screens import SHOTS, SIZE, WEEK, load_demo  # noqa: E402
+from test_screens import SHOTS, SIZE, WEEK, build_demo  # noqa: E402
 
 from brandcal import serve  # noqa: E402
 from brandcal.config import load_config  # noqa: E402
@@ -49,7 +49,7 @@ IDLE = "document.querySelectorAll('[aria-busy=\"true\"]').length === 0"
 @pytest.fixture(scope="module")
 def home(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Any]:
     path = tmp_path_factory.mktemp("demo-next") / "home"
-    load_demo().build(path, WEEK)
+    build_demo(path, WEEK)
     yield path
 
 

@@ -42,10 +42,20 @@ def load_demo() -> ModuleType:
     return module
 
 
+def build_demo(home: Path, week_start: date, *, console_approvals: bool = True) -> None:
+    """Build the demo home. Tests turn the console-approvals flag on so seeded
+    approvals (and later UI writes) still work; the script's own default stays off.
+    """
+    demo = load_demo()
+    if console_approvals:
+        demo.CONFIG["serve"]["console_approvals"] = True
+    demo.build(home, week_start)
+
+
 @pytest.fixture(scope="module")
 def base_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     home = tmp_path_factory.mktemp("demo") / "home"
-    load_demo().build(home, WEEK)
+    build_demo(home, WEEK)
     signer = Signer()
     verifier = Verifier(TEAM, AUD, 5, fetch=FakeJwks(signer))
     server = serve.make_server(home, load_config(home), 0, verifier)

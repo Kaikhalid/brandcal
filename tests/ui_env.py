@@ -20,7 +20,7 @@ UI_AGENTS: list[dict[str, str]] = AGENTS + [{"id": "console", "role": "system"}]
 CFG: dict[str, Any] = {
     "timezone": "+03:00",
     "agents": UI_AGENTS,
-    "serve": {"console_agent": "console"},
+    "serve": {"console_agent": "console", "console_approvals": True},
 }
 DATA: dict[str, Any] = {
     "slug": "example-post",

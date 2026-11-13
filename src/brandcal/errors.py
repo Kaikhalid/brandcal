@@ -135,6 +135,9 @@ class ErrorCode(StrEnum):
     CONNECTOR_REPLACED = "CONNECTOR_REPLACED"
     """A newer connector took over the relay (close 4001), so this one stopped."""
 
+    CONSOLE_DISABLED = "CONSOLE_DISABLED"
+    """A console decision was refused because serve.console_approvals is not true."""
+
     PROTOCOL_MISMATCH = "PROTOCOL_MISMATCH"
     """The relay does not speak protocol v1 (close 4002); update brandcal or the Worker."""
 
@@ -180,6 +183,7 @@ EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.CONNECTOR_REFUSED: ExitCode.NOT_ALLOWED,
     ErrorCode.CONNECTOR_REPLACED: ExitCode.CONFLICT,
     ErrorCode.PROTOCOL_MISMATCH: ExitCode.USAGE,
+    ErrorCode.CONSOLE_DISABLED: ExitCode.NOT_ALLOWED,
     ErrorCode.INTERNAL: ExitCode.INTERNAL,  # exit 1 stays reserved for a crash; HTTP status is 500
 }
 """Exit code for each error code. TODO: add the remaining codes as commands land."""

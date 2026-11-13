@@ -40,6 +40,7 @@ SERVE: dict[str, Any] = {
     "approvers": {APPROVER: "approver-1"},
     "viewers": [VIEWER],
     "console_agent": "console",
+    "console_approvals": True,
 }
 WRITES = ["approve", "request-changes", "reschedule", "cancel", "edit", "submit", "note"]
 

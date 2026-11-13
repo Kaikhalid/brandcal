@@ -41,6 +41,8 @@ Add a `serve` block to `BRANDCAL_HOME/config.json` (UI_SPEC 2.6):
 }
 ```
 
+- `serve.console_approvals` stays off unless the owner sets it to JSON `true`. Until then,
+  the UI will not record a console decision. See UI_SPEC 2.6 and section 3.
 - `team_domain` is the bare host, with no `https://` and no trailing slash; brandcal builds
   the issuer `https://example.cloudflareaccess.com` and the key URL
   `https://example.cloudflareaccess.com/cdn-cgi/access/certs` from it.
