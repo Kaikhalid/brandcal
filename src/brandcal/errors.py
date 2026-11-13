@@ -21,6 +21,7 @@ class ExitCode(IntEnum):
     APPROVAL_MISMATCH = 6
     NOT_FOUND = 7
     CONFLICT = 8
+    INTERNAL = 9
 
 
 class ErrorCode(StrEnum):
@@ -44,6 +45,105 @@ class ErrorCode(StrEnum):
     COMMENT_NOT_DELEGATED = "COMMENT_NOT_DELEGATED"
     """Agents never post comments unless a human has delegated that exact comment."""
 
+    BAD_ARGS = "BAD_ARGS"
+    """The command line could not be understood."""
+
+    TZ_NOT_CONFIGURED = "TZ_NOT_CONFIGURED"
+    """No display timezone is configured (config.json "timezone" or BRANDCAL_TZ)."""
+
+    HOME_NOT_CONFIGURED = "HOME_NOT_CONFIGURED"
+    """No data directory is configured (BRANDCAL_HOME or --home)."""
+
+    BAD_TIME = "BAD_TIME"
+    """A date or time could not be parsed."""
+
+    BAD_WINDOW = "BAD_WINDOW"
+    """A time window is not a valid ISO 8601 interval within one local date."""
+
+    ROLE_NOT_ALLOWED = "ROLE_NOT_ALLOWED"
+    """The acting agent's role may not do this."""
+
+    BAD_TRANSITION = "BAD_TRANSITION"
+    """This status change is not in the state machine (SPEC 6.1)."""
+
+    EDIT_WHILE_SCHEDULED = "EDIT_WHILE_SCHEDULED"
+    """Content or window edits are refused while the post is natively scheduled."""
+
+    EDIT_WHILE_CLAIMED = "EDIT_WHILE_CLAIMED"
+    """Edits are refused while the post is claimed for publishing."""
+
+    STALE_APPROVAL = "STALE_APPROVAL"
+    """No approval matches the post's current content version and hash."""
+
+    APPEND_ONLY = "APPEND_ONLY"
+    """Events and approvals are never changed, and deleted only by an archive run."""
+
+    NO_AGENT = "NO_AGENT"
+    """No acting agent given (--as or BRANDCAL_AGENT), or the agent is unknown."""
+
+    MEDIA_INVALID = "MEDIA_INVALID"
+    """A media file failed its checks (type, size, alt text, count)."""
+
+    TOO_LONG = "TOO_LONG"
+    """A part's text is over the platform's character limit."""
+
+    ON_HOLD = "ON_HOLD"
+    """The post has a hold that has not been cleared."""
+
+    NOT_FOUND = "NOT_FOUND"
+    """No such post in the live calendar."""
+
+    POST_CLOSED = "POST_CLOSED"
+    """The post is published or cancelled and can no longer be changed."""
+
+    INVALID_POST = "INVALID_POST"
+    """The post's structure breaks a rule (part count, target URL, article title or body)."""
+
+    HASH_MISMATCH = "HASH_MISMATCH"
+    """The content hash given, or recomputed from the files, does not match the post."""
+
+    CLAIMED = "CLAIMED"
+    """The post is claimed for publishing by a manager."""
+
+    URL_CONFLICT = "URL_CONFLICT"
+    """The post is already published with a different URL."""
+
+    ARCHIVED = "ARCHIVED"
+    """The post was moved to a monthly archive file; read it with archive show."""
+
+    IDENTITY_UNVERIFIED = "IDENTITY_UNVERIFIED"
+    """No verified identity (Access JWT) backs this decision; the CLI and dev mode cannot decide."""
+
+    IDENTITY_UNMAPPED = "IDENTITY_UNMAPPED"
+    """The identity is verified but is not listed as an approver or viewer in serve.approvers."""
+
+    BAD_ORIGIN = "BAD_ORIGIN"
+    """A write came from an origin or host that serve.allowed_origins does not list."""
+
+    REASON_REQUIRED = "REASON_REQUIRED"
+    """Request changes needs what, where and instruction, all non-empty."""
+
+    EXTRA_NOT_INSTALLED = "EXTRA_NOT_INSTALLED"
+    """An optional extra this feature needs (cryptography for Access JWTs) is not installed."""
+
+    SECRET_UNAVAILABLE = "SECRET_UNAVAILABLE"
+    """A relay secret file is missing, unreadable or empty, or the token file is malformed."""
+
+    CONNECTOR_REFUSED = "CONNECTOR_REFUSED"
+    """The relay refused the connector's credentials (HTTP 401 or 403, or close 4003)."""
+
+    CONNECTOR_REPLACED = "CONNECTOR_REPLACED"
+    """A newer connector took over the relay (close 4001), so this one stopped."""
+
+    CONSOLE_DISABLED = "CONSOLE_DISABLED"
+    """A console decision was refused because serve.console_approvals is not true."""
+
+    PROTOCOL_MISMATCH = "PROTOCOL_MISMATCH"
+    """The relay does not speak protocol v1 (close 4002); update brandcal or the Worker."""
+
+    INTERNAL = "INTERNAL"
+    """An unexpected fault in `brandcal serve`; the reply carries no detail (HTTP 500)."""
+
 
 EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.TIME_OFFSET_REQUIRED: ExitCode.VALIDATION,
@@ -52,6 +152,39 @@ EXIT_CODES: dict[ErrorCode, ExitCode] = {
     ErrorCode.NO_FRESH_BACKUP: ExitCode.BAD_STATE,
     ErrorCode.WINDOW_NOT_APPROVED: ExitCode.APPROVAL_MISMATCH,
     ErrorCode.CHECK_LIVE_FIRST: ExitCode.CONFLICT,
+    ErrorCode.BAD_ARGS: ExitCode.USAGE,
+    ErrorCode.TZ_NOT_CONFIGURED: ExitCode.USAGE,
+    ErrorCode.HOME_NOT_CONFIGURED: ExitCode.USAGE,
+    ErrorCode.BAD_TIME: ExitCode.VALIDATION,
+    ErrorCode.BAD_WINDOW: ExitCode.VALIDATION,
+    ErrorCode.ROLE_NOT_ALLOWED: ExitCode.NOT_ALLOWED,
+    ErrorCode.BAD_TRANSITION: ExitCode.BAD_STATE,
+    ErrorCode.EDIT_WHILE_SCHEDULED: ExitCode.BAD_STATE,
+    ErrorCode.EDIT_WHILE_CLAIMED: ExitCode.BAD_STATE,
+    ErrorCode.STALE_APPROVAL: ExitCode.APPROVAL_MISMATCH,
+    ErrorCode.APPEND_ONLY: ExitCode.BAD_STATE,
+    ErrorCode.NO_AGENT: ExitCode.USAGE,
+    ErrorCode.MEDIA_INVALID: ExitCode.VALIDATION,
+    ErrorCode.TOO_LONG: ExitCode.VALIDATION,
+    ErrorCode.ON_HOLD: ExitCode.VALIDATION,
+    ErrorCode.NOT_FOUND: ExitCode.NOT_FOUND,
+    ErrorCode.POST_CLOSED: ExitCode.BAD_STATE,
+    ErrorCode.INVALID_POST: ExitCode.VALIDATION,
+    ErrorCode.HASH_MISMATCH: ExitCode.APPROVAL_MISMATCH,
+    ErrorCode.CLAIMED: ExitCode.CONFLICT,
+    ErrorCode.URL_CONFLICT: ExitCode.CONFLICT,
+    ErrorCode.ARCHIVED: ExitCode.NOT_FOUND,
+    ErrorCode.IDENTITY_UNVERIFIED: ExitCode.NOT_ALLOWED,
+    ErrorCode.IDENTITY_UNMAPPED: ExitCode.NOT_ALLOWED,
+    ErrorCode.BAD_ORIGIN: ExitCode.NOT_ALLOWED,
+    ErrorCode.REASON_REQUIRED: ExitCode.VALIDATION,
+    ErrorCode.EXTRA_NOT_INSTALLED: ExitCode.USAGE,
+    ErrorCode.SECRET_UNAVAILABLE: ExitCode.USAGE,
+    ErrorCode.CONNECTOR_REFUSED: ExitCode.NOT_ALLOWED,
+    ErrorCode.CONNECTOR_REPLACED: ExitCode.CONFLICT,
+    ErrorCode.PROTOCOL_MISMATCH: ExitCode.USAGE,
+    ErrorCode.CONSOLE_DISABLED: ExitCode.NOT_ALLOWED,
+    ErrorCode.INTERNAL: ExitCode.INTERNAL,  # exit 1 stays reserved for a crash; HTTP status is 500
 }
 """Exit code for each error code. TODO: add the remaining codes as commands land."""
 
@@ -59,3 +192,23 @@ EXIT_CODES: dict[ErrorCode, ExitCode] = {
 def exit_code_for(code: ErrorCode) -> int:
     """Return the process exit code for an error code."""
     return int(EXIT_CODES[code])
+
+
+class BrandcalError(Exception):
+    """An expected failure with a stable code, a message and a suggested next step."""
+
+    def __init__(self, code: ErrorCode, message: str, next_step: str = "") -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.next_step = next_step
+
+    @property
+    def exit_code(self) -> int:
+        return exit_code_for(self.code)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "ok": False,
+            "error": {"code": self.code.value, "message": self.message, "next": self.next_step},
+        }

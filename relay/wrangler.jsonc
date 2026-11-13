@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "brandcal-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-22",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "brandcal.example.com", "custom_domain": true },
+    { "pattern": "brandcal-relay.example.com", "custom_domain": true }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "RELAY", "class_name": "Relay" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Relay"] }],
+  "vars": {
+    "PUBLIC_HOST": "brandcal.example.com",
+    "RELAY_HOST": "brandcal-relay.example.com"
+  },
+  "observability": {
+    "logs": { "enabled": true, "invocation_logs": false }
+  }
+}

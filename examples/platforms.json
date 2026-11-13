@@ -1,0 +1,4 @@
+{
+  "linkedin": {"chars_per_post": 3000, "images_per_post": 9, "image_mb": 5},
+  "x": {"premium": false, "chars_per_post": 280, "images_per_post": 4, "image_mb": 5}
+}

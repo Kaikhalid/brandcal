@@ -1,0 +1,11 @@
+{
+  "slug": "example-launch",
+  "title": "Example launch post",
+  "platform": "linkedin",
+  "post_type": "text",
+  "window": "2030-03-04T09:00:00+00:00/2030-03-04T10:00:00+00:00",
+  "parts": [
+    {"text": "Example Co is launching the Widget 2000 today. Read more at https://example.com/widget."}
+  ],
+  "keywords": ["example", "launch"]
+}

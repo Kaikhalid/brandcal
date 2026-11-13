@@ -22,6 +22,8 @@ htmlcov/
 backups/
 archive/
 media/
+# ...but the built UI's fonts and icons live in a folder Next calls media
+!src/brandcal/web_next/_next/static/media/
 
 # Secrets and local config
 .env
@@ -31,3 +33,11 @@ media/
 .idea/
 .vscode/
 .DS_Store
+
+
+# Front end (web/): Node deps, Next.js build cache and static export
+web/node_modules/
+web/.next/
+web/out/
+web/next-env.d.ts
+*.tsbuildinfo
