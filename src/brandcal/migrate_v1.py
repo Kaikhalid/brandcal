@@ -232,7 +232,14 @@ def _not_imported(item: dict[str, Any], reason: str) -> dict[str, Any]:
     }
 
 
-def _plan_item(item: dict[str, Any], cfg: Mapping[str, Any], tz: Any) -> dict[str, Any] | str:
+def _plan_item(
+    item: dict[str, Any],
+    cfg: Mapping[str, Any],
+    tz: Any,
+    *,
+    keep_approved: bool = False,
+    approved_words: str | None = None,
+) -> dict[str, Any] | str:
     """The post to insert for one item, or the reason it is not imported."""
     status = item["status"]
     window = _window(item["date"], item["window"], tz)
@@ -250,10 +257,15 @@ def _plan_item(item: dict[str, Any], cfg: Mapping[str, Any], tz: Any) -> dict[st
     docs = [a for a in item["assets"] if a.lower().endswith(".md")]
     post: dict[str, Any] = {
         "legacy_id": item["id"],
-        "status": {
-            "posted": "published",
-            "skipped": "cancelled",
-        }.get(status, "pending_approval"),
+        "status": (
+            "published"
+            if status == "posted"
+            else "cancelled"
+            if status == "skipped"
+            else "approved"
+            if status == "approved" and keep_approved
+            else "pending_approval"
+        ),
         "v1_status": status,
         "slug": _slug(item["title"], item["id"]),
         "title": item["title"],
@@ -272,14 +284,31 @@ def _plan_item(item: dict[str, Any], cfg: Mapping[str, Any], tz: Any) -> dict[st
         "approval": None,
         "extras": _extras(item),
     }
-    if published is not None:
+    keep = status == "approved" and keep_approved
+    if published is not None or keep:
         approver, manager = _first_agent(cfg, "approver"), _first_agent(cfg, "manager")
-        words = "legacy import, unverified"
         decided_at = published
         if item["approved_on"].strip():
             on = timefmt.parse_date(item["approved_on"]).isoformat()
-            words += f" (approved on {on})"
             decided_at = _local(f"{on}T00:00", tz)
+        elif decided_at is None:
+            decided_at = (
+                _local(f"{timefmt.parse_date(item['date']).isoformat()}T00:00", tz)
+                if item["date"].strip()
+                else None
+            )
+        if keep and approved_words:
+            words = approved_words
+        elif keep:
+            words = "legacy import, already approved in v1"
+            if item["approved_on"].strip():
+                words += f" (approved on {timefmt.parse_date(item['approved_on']).isoformat()})"
+        else:
+            words = "legacy import, unverified"
+            if item["approved_on"].strip():
+                words += f" (approved on {timefmt.parse_date(item['approved_on']).isoformat()})"
+        if decided_at is None:
+            return "needs a decision time"
         post["approval"] = {
             "decided_by": approver,
             "relayed_by": manager,
@@ -292,7 +321,12 @@ def _plan_item(item: dict[str, Any], cfg: Mapping[str, Any], tz: Any) -> dict[st
 
 
 def plan(
-    data: object, cfg: Mapping[str, Any], existing_legacy_ids: Collection[str]
+    data: object,
+    cfg: Mapping[str, Any],
+    existing_legacy_ids: Collection[str],
+    *,
+    keep_approved: bool = False,
+    approved_words: str | None = None,
 ) -> dict[str, Any]:
     """What a migration would do, with no database access. Ids are filled in by ``migrate``."""
     tz = display_tz(cfg)
@@ -312,7 +346,9 @@ def plan(
             already.append(lid)
             continue
         try:
-            result = _plan_item(item, cfg, tz)
+            result = _plan_item(
+                item, cfg, tz, keep_approved=keep_approved, approved_words=approved_words
+            )
         except BrandcalError as err:
             raise BrandcalError(err.code, f"Item {lid}: {err.message}", err.next_step) from None
         if isinstance(result, str):
@@ -352,6 +388,9 @@ def plan(
 def _insert(conn: sqlite3.Connection, post: dict[str, Any], owner: str, now: str, who: str) -> str:
     post_id = posts.next_post_id(conn)
     status = post["status"]
+    # Insert approved rows as pending_approval first: adding parts would otherwise fire
+    # the content-bump trigger and drop them back to pending_approval.
+    insert_status = "pending_approval" if status == "approved" else status
     closed = status in ("published", "cancelled")
     extras = json.dumps(post["extras"], ensure_ascii=False, separators=(",", ":"))
     conn.execute(
@@ -359,7 +398,7 @@ def _insert(conn: sqlite3.Connection, post: dict[str, Any], owner: str, now: str
         " source_doc, notes, content_hash, legacy_id, platform_url, published_at, cancel_kind,"
         " first_comment, extras, created_at, updated_at, closed_at)"
         " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (post_id, post["slug"], post["title"], post["platform"], post["post_type"], status)
+        (post_id, post["slug"], post["title"], post["platform"], post["post_type"], insert_status)
         + (owner, post["window"], post["source_doc"], post["notes"], "0" * 64, post["legacy_id"])
         + (post["url"], post["published"], "plan" if status == "cancelled" else None)
         + (post["first_comment"], extras)
@@ -381,6 +420,11 @@ def _insert(conn: sqlite3.Connection, post: dict[str, Any], owner: str, now: str
             (post_id, digest, post["window"] or "", approval["decided_by"])
             + (approval["relayed_by"], approval["recorded_by"], approval["source_message_id"])
             + (approval["approver_words"], approval["decided_at"]),
+        )
+    if status == "approved":
+        conn.execute(
+            "UPDATE posts SET status = 'approved', updated_at = ? WHERE id = ?",
+            (now, post_id),
         )
     events.append_event(
         conn,
@@ -419,12 +463,16 @@ def migrate(
     out: Path | None = None,
     owner: str | None = None,
     now: str | None = None,
+    keep_approved: bool = False,
+    approved_words: str | None = None,
 ) -> dict[str, Any]:
     """Import (or, with dry_run, only report) a v1 calendar; see SPEC 12."""
+    if approved_words and not keep_approved:
+        raise _bad("--legacy-approved-words requires --legacy-approved.")
     existing = {
         r[0] for r in conn.execute("SELECT legacy_id FROM posts WHERE legacy_id IS NOT NULL")
     }
-    report = plan(data, cfg, existing)
+    report = plan(data, cfg, existing, keep_approved=keep_approved, approved_words=approved_words)
     new_posts: list[dict[str, Any]] = report.pop("_posts")
     details: list[dict[str, Any]] = report.pop("_details")
     if new_posts:

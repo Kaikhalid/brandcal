@@ -95,7 +95,7 @@ are **fields on an approved post**, not separate states.
 | `brandcal sweep` | Mark missed posts, release expired claims |
 | `brandcal audit` | Verify hash chains, approvals of published posts and media checksums |
 | `brandcal export` / `backup` / `backup restore-test` | JSON export, checked database copies and a restore test |
-| `brandcal migrate FILE [--dry-run]` | Import a v1 JSON calendar |
+| `brandcal migrate FILE [--dry-run] [--legacy-approved]` | Import a v1 JSON calendar |
 
 Every command prints one line of JSON. Every write needs `--as NAME` (or `BRANDCAL_AGENT`).
 Error codes and exit codes are listed in [docs/ERRORS.md](docs/ERRORS.md); the full
