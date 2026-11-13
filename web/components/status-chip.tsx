@@ -65,26 +65,41 @@ export function statusLabel(status: string, role?: string | null): string {
   return lookFor(status).label
 }
 
+/** A short visible word for compact chips on narrow calendar stacks. The full label stays
+ *  in an sr-only span. Only "Changes requested" needs a shorter word; the others already fit. */
+function shortLabel(status: string): string | null {
+  if (status === "changes_requested") return "Changes"
+  return null
+}
+
 /** The five styles of UI_STYLE, for galleries. */
 export const STATUS_STYLES = ["draft", "awaiting", "scheduled", "published", "failed"] as const
 
-function StatusChip({ status, className }: { status: string; className?: string }) {
+function StatusChip({ status, className, compact }: { status: string; className?: string; compact?: boolean }) {
   const { session } = useAppData()
   const { Icon, tone } = lookFor(status)
-  const label = statusLabel(status, session.state === "ok" ? session.data.role : null)
+  const fullLabel = statusLabel(status, session.state === "ok" ? session.data.role : null)
+  const short = compact ? shortLabel(status) : null
   return (
     <span
       data-status={status}
       title={status}
       className={cn(
-        // min-h, not h, and no nowrap: wider text spacing wraps the word instead of spilling out.
+        // min-h, not h, and no nowrap: 1.4.12 text spacing must wrap rather than clip.
         "inline-flex min-h-7 max-w-full items-center gap-1.5 rounded-full py-1 pr-3 pl-2.5 text-[0.8125rem] leading-tight",
         tone,
         className
       )}
     >
       <Icon aria-hidden="true" strokeWidth={1.5} className="size-4 shrink-0" />
-      {label}
+      {short ? (
+        <>
+          <span className="sr-only">{fullLabel}</span>
+          <span aria-hidden="true">{short}</span>
+        </>
+      ) : (
+        fullLabel
+      )}
     </span>
   )
 }

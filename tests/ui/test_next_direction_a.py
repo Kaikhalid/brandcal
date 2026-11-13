@@ -211,7 +211,9 @@ def test_the_week_keeps_seven_stacks_beside_the_panel_with_the_sidebar_collapsed
         assert not any(c["over"] for c in found["cards"]), "a card passes its well"
         assert not any(c["clipped"] for c in found["cards"]), "a card clips its content"
         chips = page.evaluate(CARD_JS)  # the narrowest wells (about 100 px of card): still one line
-        assert all(c["chipH"] < 36 for c in chips if len(c["label"]) <= 14), chips
+        assert all(c["chipH"] < 36 for c in chips), (
+            chips
+        )  # all chips stay on one line in narrow well
         current = page.locator("button[aria-current=true][data-post-id]")
         expect(current).to_have_count(1)
     finally:
@@ -225,7 +227,10 @@ CARD_JS = """() => [...document.querySelectorAll('[aria-label="Week calendar"] b
   const chip = c.querySelector('[data-status]');
   const icon = chip.querySelector('svg');
   const end = c.querySelector('[data-card-end]');
-  return { w: c.getBoundingClientRect().width, chipH: chip.getBoundingClientRect().height, icon: vis(icon), label: chip.textContent,
+  const srOnly = chip.querySelector('.sr-only');
+  const visibleText = chip.querySelector('[aria-hidden="true"]');
+  const accessibleText = srOnly ? srOnly.textContent : visibleText ? visibleText.textContent : (chip.querySelector(':not([aria-hidden])')?.textContent || '');
+  return { w: c.getBoundingClientRect().width, chipH: chip.getBoundingClientRect().height, icon: vis(icon), label: accessibleText,
     end: vis(end) ? end.textContent.trim() : null, time: c.querySelector('[data-card-time]').textContent,
     hyphens: getComputedStyle(c.querySelector('[data-card-title]')).hyphens,
     badges: [...c.querySelectorAll('[data-badge]')].map((b) => ({ id: b.dataset.badge, visible: b.innerText.trim() })) };
@@ -243,6 +248,7 @@ def test_a_wide_card_prints_its_window_and_names_its_badges(
             assert re.fullmatch(r"–\d\d:\d\d", c["end"] or ""), c
             assert c["time"] and "–" not in c["time"], c  # the start time stays on its own
             assert c["hyphens"] == "manual", c  # no automatic hyphenation
+            assert c["chipH"] < 36, c  # including "Changes requested", shown as "Changes"
         badges = [b for c in cards for b in c["badges"]]
         assert badges, "the demo week has a card with a badge"
         assert all(b["visible"] for b in badges), badges  # never an icon alone at this width
@@ -260,8 +266,7 @@ def test_a_narrow_card_keeps_one_line_chips_and_no_window(
         for c in cards:
             assert c["end"] is None, c  # "09:00" alone below 8 rem
             assert not c["icon"], c  # the chip keeps its word and drops its icon
-            if len(c["label"]) <= 14:  # one line ("Awaiting you" no longer wraps); a long label may
-                assert c["chipH"] < 36, c
+            assert c["chipH"] < 36, c  # all chips stay on one line in narrow well
             assert c["hyphens"] == "manual", c
     finally:
         page.context.close()
@@ -311,6 +316,43 @@ def test_the_month_uses_bands_below_880_px_and_never_scrolls_sideways(
         found = page.evaluate(MONTH_JS)
         assert found["page"] <= found["w"], found
         assert found["scroll"][0] <= found["scroll"][1], found
+    finally:
+        page.context.close()
+
+
+# -- accessible text -----------------------------------------------------------------------
+
+
+ACCESSIBLE_TEXT_JS = """() => {
+  const cards = [...document.querySelectorAll('[aria-label="Week calendar"] button[data-post-id]')];
+  const results = [];
+  for (const c of cards) {
+    const chip = c.querySelector('[data-status]');
+    const srOnly = chip?.querySelector('.sr-only');
+    const title = chip?.getAttribute('title');
+    const status = chip?.dataset.status;
+    results.push({ status, accessibleText: srOnly?.textContent || title || '', hasSrOnly: !!srOnly });
+  }
+  return results;
+}"""
+
+
+def test_narrow_card_exposes_full_accessible_text_for_changes_requested(
+    browser: Any, site: tuple[str, str]
+) -> None:
+    """Verify that narrow cards expose the full accessible text for all status chips."""
+    page = week(browser, site, size=LAPTOP)  # 1024: the rail collapses by itself
+    try:
+        cards = page.evaluate(ACCESSIBLE_TEXT_JS)
+        assert cards and all(c["accessibleText"] for c in cards), [
+            c for c in cards if not c["accessibleText"]
+        ]
+        # Find the changes_requested post (teaser on Wednesday)
+        changes_posts = [c for c in cards if c["status"] == "changes_requested"]
+        assert len(changes_posts) >= 1, "demo week has at least one Changes requested post"
+        for c in changes_posts:
+            assert c["accessibleText"] == "Changes requested", c
+            assert c["hasSrOnly"], c  # full label in sr-only span
     finally:
         page.context.close()
 

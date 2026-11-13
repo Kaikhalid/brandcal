@@ -111,10 +111,12 @@ function StackCard({ entry: { item, span }, open, current, zone }: Common & { zo
       >
         {row.title}
       </span>
-      {/* In a narrow well (under 8 rem of card) the chip keeps its word and drops its icon, so
-          "Awaiting you" stays on one line. */}
+      {/* Stack wells stay narrow even at 1440, so the chip is always compact: "Changes
+          requested" shows as "Changes", and the icon drops under 8 rem. The full label stays
+          available to screen readers. */}
       <StatusChip
         status={row.status}
+        compact
         className="min-h-7 gap-1 pr-2.5 pl-2 text-[0.8125rem] @max-[8rem]:px-2 @max-[7rem]:px-1.5 @max-[8rem]:[&>svg]:hidden"
       />
       <PostBadges post={detail} compact />
