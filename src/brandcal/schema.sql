@@ -40,10 +40,11 @@ CREATE TABLE IF NOT EXISTS posts (
   cancel_kind   TEXT CHECK (cancel_kind IN ('idea','version','plan')),
   notes         TEXT,
   legacy_id     TEXT UNIQUE,
+  extras        TEXT CHECK (extras IS NULL OR json_valid(extras)),
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL, closed_at TEXT,
   CHECK (window GLOB '????-??-??T??:??:??[+-]??:??/????-??-??T??:??:??[+-]??:??'),
   CHECK (window_end_utc > window_start_utc),
-  CHECK (window IS NOT NULL OR (legacy_id IS NOT NULL AND status = 'published')),
+  CHECK (window IS NOT NULL OR legacy_id IS NOT NULL),
   CHECK (post_type <> 'comment' OR (delegation_msg_id IS NOT NULL AND delegation_words IS NOT NULL)),
   CHECK (post_type NOT IN ('comment','reshare') OR target_url IS NOT NULL),
   CHECK ((status = 'cancelled') = (cancel_kind IS NOT NULL)),
@@ -433,4 +434,4 @@ BEGIN
 END;
 
 -- Schema version (migrations.LATEST). Existing databases are migrated before this runs.
-PRAGMA user_version = 2;
+PRAGMA user_version = 3;

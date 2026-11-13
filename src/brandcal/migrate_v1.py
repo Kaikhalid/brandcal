@@ -21,14 +21,32 @@ from brandcal.errors import BrandcalError, ErrorCode
 STATUSES = ("idea", "draft", "approved", "posted", "skipped")
 NOT_IMPORTED_FILE = "migrate_not_imported.json"
 NEXT_STEP = "run brandcal check ID for each pending_approval post"
+_KNOWN = frozenset(
+    {
+        "id",
+        "platform",
+        "status",
+        "date",
+        "window",
+        "title",
+        "body",
+        "first_comment",
+        "assets",
+        "approved_on",
+        "posted_at",
+        "url",
+        "posted_url",
+        "notes",
+    }
+)
 _STR_FIELDS = (
     "date",
     "window",
     "title",
     "body",
+    "first_comment",
     "approved_on",
     "posted_at",
-    "url",
     "notes",
 )
 _WINDOW = re.compile(r"(\d{2}:\d{2})-(\d{2}:\d{2})")
@@ -40,13 +58,51 @@ def _bad(message: str) -> BrandcalError:
     return BrandcalError(ErrorCode.BAD_ARGS, message)
 
 
+def _as_str(raw: Mapping[str, Any], key: str, ident: str) -> str:
+    value = raw.get(key, "")
+    if value is None:
+        value = ""
+    if not isinstance(value, str):
+        raise _bad(f"Item {ident}: {key} must be a string.")
+    return value
+
+
+def _url_from_v1(raw: Mapping[str, Any], ident: str) -> tuple[str, str | None, str | None]:
+    """Return (mapped url, raw url if the key was present, raw posted_url if present)."""
+    has_url = "url" in raw
+    has_posted = "posted_url" in raw
+    url = _as_str(raw, "url", ident) if has_url else ""
+    posted = _as_str(raw, "posted_url", ident) if has_posted else ""
+    left, right = url.strip(), posted.strip()
+    if left and right and left != right:
+        raise _bad(f"Item {ident}: url and posted_url both set and differ.")
+    return left or right, (url if has_url else None), (posted if has_posted else None)
+
+
+def _unknown(raw: Mapping[str, Any], ident: str) -> dict[str, Any]:
+    extra = {k: raw[k] for k in raw if k not in _KNOWN}
+    if not extra:
+        return {}
+    try:
+        json.dumps(extra, ensure_ascii=False)
+    except (TypeError, ValueError) as err:
+        raise _bad(f"Item {ident}: cannot preserve unknown fields: {err}.") from None
+    return extra
+
+
+def _raw_items(data: object) -> list[object]:
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict) and isinstance(data.get("items"), list):
+        return list(data["items"])
+    raise _bad('The v1 file must be a JSON array, or a JSON object with an "items" list.')
+
+
 def _items(data: object) -> list[dict[str, Any]]:
-    """Check the shape of the file and return its items with every field present."""
-    if not isinstance(data, dict) or not isinstance(data.get("items"), list):
-        raise _bad('The v1 file must be a JSON object with an "items" list.')
+    """Check the shape of the file and return its items with every known field present."""
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for n, raw in enumerate(data["items"], 1):
+    for n, raw in enumerate(_raw_items(data), 1):
         if not isinstance(raw, dict):
             raise _bad(f"Item {n} is not an object.")
         item: dict[str, Any] = {}
@@ -54,22 +110,23 @@ def _items(data: object) -> list[dict[str, Any]]:
             if not isinstance(raw.get(key), str) or not raw[key]:
                 raise _bad(f"Item {n}: {key} must be a non-empty string.")
             item[key] = raw[key]
+        ident = item["id"]
         for key in _STR_FIELDS:
-            value = raw.get(key, "")
-            if value is None:
-                value = ""
-            if not isinstance(value, str):
-                raise _bad(f"Item {item['id']}: {key} must be a string.")
-            item[key] = value
+            item[key] = _as_str(raw, key, ident)
         assets = raw.get("assets") or []
         if not isinstance(assets, list) or not all(isinstance(a, str) for a in assets):
-            raise _bad(f"Item {item['id']}: assets must be a list of strings.")
+            raise _bad(f"Item {ident}: assets must be a list of strings.")
         item["assets"] = assets
+        mapped, raw_url, raw_posted = _url_from_v1(raw, ident)
+        item["url"] = mapped
+        item["_raw_url"] = raw_url
+        item["_raw_posted_url"] = raw_posted
+        item["_unknown"] = _unknown(raw, ident)
         if item["status"] not in STATUSES:
-            raise _bad(f"Item {item['id']}: unknown status {item['status']!r}.")
-        if item["id"] in seen:
-            raise _bad(f"Item id {item['id']!r} appears twice.")
-        seen.add(item["id"])
+            raise _bad(f"Item {ident}: unknown status {item['status']!r}.")
+        if ident in seen:
+            raise _bad(f"Item id {ident!r} appears twice.")
+        seen.add(ident)
         items.append(item)
     return items
 
@@ -113,13 +170,13 @@ def _window(date: str, window: str, tz: Any) -> str | None:
 
 
 def split_parts(body: str, title: str) -> list[str]:
-    """Split a thread body on line-start ``1/``, ``2/`` ... markers; empty body gives the title."""
+    """Split a thread body on line-start ``1/``, ``2/`` ... markers; an empty body stays empty."""
     marks: list[re.Match[str]] = []
     for m in _MARKER.finditer(body):
         if int(m[1]) == len(marks) + 1:
             marks.append(m)
     if not marks:
-        return [body.strip() or title]
+        return [body.strip() or body]
     pieces = [
         body[m.end() : (marks[i + 1].start() if i + 1 < len(marks) else len(body))]
         for i, m in enumerate(marks)
@@ -139,6 +196,26 @@ def _slug(title: str, legacy_id: str) -> str:
     return "post"
 
 
+def _extras(item: dict[str, Any]) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "v1_status": item["status"],
+        "date": item["date"],
+        "window": item["window"],
+        "body": item["body"],
+        "first_comment": item["first_comment"],
+        "assets": item["assets"],
+        "approved_on": item["approved_on"],
+        "posted_at": item["posted_at"],
+    }
+    if item["_raw_url"] is not None:
+        payload["url"] = item["_raw_url"]
+    if item["_raw_posted_url"] is not None:
+        payload["posted_url"] = item["_raw_posted_url"]
+    if item["_unknown"]:
+        payload["unknown"] = item["_unknown"]
+    return payload
+
+
 def _not_imported(item: dict[str, Any], reason: str) -> dict[str, Any]:
     return {
         "legacy_id": item["id"],
@@ -151,30 +228,32 @@ def _not_imported(item: dict[str, Any], reason: str) -> dict[str, Any]:
         "window": item["window"],
         "assets": item["assets"],
         "notes": item["notes"],
+        "first_comment": item["first_comment"],
     }
 
 
 def _plan_item(item: dict[str, Any], cfg: Mapping[str, Any], tz: Any) -> dict[str, Any] | str:
     """The post to insert for one item, or the reason it is not imported."""
     status = item["status"]
-    if status in ("idea", "draft"):
-        return str(status)
     window = _window(item["date"], item["window"], tz)
     published = None
+    posted_at_fallback = False
     if status == "posted":
-        if not item["posted_at"].strip():
-            return "needs posted_at"
-        published = _posted_at(item["posted_at"], tz)
-    elif window is None:
-        return "needs a date and window"
+        if item["posted_at"].strip():
+            published = _posted_at(item["posted_at"], tz)
+        elif item["date"].strip():
+            published = _posted_at(item["date"], tz)
+            posted_at_fallback = True
+        else:
+            return "needs posted_at or date"
     parts = split_parts(item["body"], item["title"])
     docs = [a for a in item["assets"] if a.lower().endswith(".md")]
-    notes = item["notes"]
-    if len(docs) > 1:
-        notes = (notes + "\n" if notes else "") + "Other source docs: " + ", ".join(docs[1:])
     post: dict[str, Any] = {
         "legacy_id": item["id"],
-        "status": {"posted": "published", "approved": "pending_approval"}.get(status, "cancelled"),
+        "status": {
+            "posted": "published",
+            "skipped": "cancelled",
+        }.get(status, "pending_approval"),
         "v1_status": status,
         "slug": _slug(item["title"], item["id"]),
         "title": item["title"],
@@ -183,11 +262,15 @@ def _plan_item(item: dict[str, Any], cfg: Mapping[str, Any], tz: Any) -> dict[st
         "window": window,
         "parts": parts,
         "source_doc": docs[0] if docs else None,
-        "notes": notes or None,
+        "notes": item["notes"] or None,
+        "first_comment": item["first_comment"] or None,
         "assets": [a for a in item["assets"] if not a.lower().endswith(".md")],
+        "md_assets": docs,
         "published": published,
+        "posted_at_fallback": posted_at_fallback,
         "url": item["url"].strip() or None,
         "approval": None,
+        "extras": _extras(item),
     }
     if published is not None:
         approver, manager = _first_agent(cfg, "approver"), _first_agent(cfg, "manager")
@@ -217,6 +300,9 @@ def plan(
     not_imported: list[dict[str, Any]] = []
     already: list[str] = []
     missing_url: list[dict[str, Any]] = []
+    missing_posted_at: list[dict[str, Any]] = []
+    needs_window: list[dict[str, Any]] = []
+    unknown_fields: list[dict[str, Any]] = []
     assets: list[dict[str, Any]] = []
     new_posts: list[dict[str, Any]] = []
     details: list[dict[str, Any]] = []
@@ -237,6 +323,16 @@ def plan(
         imported.append({"legacy_id": lid, "id": None, "status": result["status"]})
         if result["v1_status"] == "posted" and result["url"] is None:
             missing_url.append({"id": None, "legacy_id": lid})
+        if result["posted_at_fallback"]:
+            missing_posted_at.append(
+                {"id": None, "legacy_id": lid, "published_at": result["published"]}
+            )
+        if result["status"] == "pending_approval" and result["window"] is None:
+            needs_window.append({"id": None, "legacy_id": lid})
+        if result["extras"].get("unknown"):
+            unknown_fields.append(
+                {"id": None, "legacy_id": lid, "keys": sorted(result["extras"]["unknown"])}
+            )
         if result["assets"]:
             assets.append({"id": None, "legacy_id": lid, "paths": result["assets"]})
     return {
@@ -244,6 +340,9 @@ def plan(
         "not_imported": not_imported,
         "already_imported": already,
         "missing_url": missing_url,
+        "missing_posted_at": missing_posted_at,
+        "needs_window": needs_window,
+        "unknown_fields": unknown_fields,
         "assets_to_add": assets,
         "_posts": new_posts,
         "_details": details,
@@ -254,13 +353,16 @@ def _insert(conn: sqlite3.Connection, post: dict[str, Any], owner: str, now: str
     post_id = posts.next_post_id(conn)
     status = post["status"]
     closed = status in ("published", "cancelled")
+    extras = json.dumps(post["extras"], ensure_ascii=False, separators=(",", ":"))
     conn.execute(
         'INSERT INTO posts (id, slug, title, platform, post_type, status, owner, "window",'
         " source_doc, notes, content_hash, legacy_id, platform_url, published_at, cancel_kind,"
-        " created_at, updated_at, closed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        " first_comment, extras, created_at, updated_at, closed_at)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (post_id, post["slug"], post["title"], post["platform"], post["post_type"], status)
         + (owner, post["window"], post["source_doc"], post["notes"], "0" * 64, post["legacy_id"])
         + (post["url"], post["published"], "plan" if status == "cancelled" else None)
+        + (post["first_comment"], extras)
         + (now, now, (post["published"] or now) if closed else None),
     )
     conn.executemany(
@@ -294,7 +396,14 @@ def _insert(conn: sqlite3.Connection, post: dict[str, Any], owner: str, now: str
 
 
 def _fill_ids(report: dict[str, Any], ids: Mapping[str, str]) -> None:
-    for key in ("imported", "missing_url", "assets_to_add"):
+    for key in (
+        "imported",
+        "missing_url",
+        "missing_posted_at",
+        "needs_window",
+        "unknown_fields",
+        "assets_to_add",
+    ):
         for entry in report[key]:
             entry["id"] = ids[entry["legacy_id"]]
 

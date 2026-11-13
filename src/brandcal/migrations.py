@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import sqlite3
 
-LATEST = 2
+LATEST = 3
 
 _APPROVALS = """CREATE TABLE IF NOT EXISTS approvals (
   id INTEGER PRIMARY KEY,
@@ -87,9 +87,6 @@ def _0002_console_channel(conn: sqlite3.Connection) -> None:
         conn.execute(trigger)
 
 
-MIGRATIONS = {2: _0002_console_channel}
-
-
 def current_version(conn: sqlite3.Connection) -> int:
     """The schema version; 0 means no schema yet."""
     version = int(conn.execute("PRAGMA user_version").fetchone()[0])
@@ -99,17 +96,82 @@ def current_version(conn: sqlite3.Connection) -> int:
     return 1 if has.fetchone() else 0
 
 
+_POST_TRIGGER_NAMES = (
+    "posts_insert_status",
+    "posts_status_transition",
+    "posts_approved_needs_approval",
+    "posts_published_needs_approval",
+    "posts_edit_while_queued",
+    "posts_content_bump",
+)
+
+
+def _schema_sql() -> str:
+    from importlib import resources
+
+    return resources.files("brandcal").joinpath("schema.sql").read_text(encoding="utf-8")
+
+
+def _extract_table(sql: str, name: str) -> str:
+    header = f"CREATE TABLE IF NOT EXISTS {name} ("
+    start = sql.index(header)
+    end = sql.index("\n);\n", start) + len("\n);")
+    return sql[start:end]
+
+
+def _extract_trigger(sql: str, name: str) -> str:
+    header = f"CREATE TRIGGER IF NOT EXISTS {name}\n"
+    start = sql.index(header)
+    end = sql.index("\nEND;", start) + len("\nEND;")
+    return sql[start:end]
+
+
+def _writable_columns(conn: sqlite3.Connection, table: str) -> list[str]:
+    return [str(row[1]) for row in conn.execute(f"PRAGMA table_xinfo({table})") if row[6] == 0]
+
+
+def _0003_posts_extras(conn: sqlite3.Connection) -> None:
+    """Add posts.extras and allow a null window on any legacy imported row."""
+    sql = _schema_sql()
+    create_posts = _extract_table(sql, "posts")
+    triggers = [_extract_trigger(sql, name) for name in _POST_TRIGGER_NAMES]
+    for name in _POST_TRIGGER_NAMES:
+        conn.execute(f"DROP TRIGGER {name}")
+    # Keep parts and approvals pointing at the name `posts` while the table is rebuilt.
+    conn.execute("PRAGMA legacy_alter_table = ON")
+    conn.execute("ALTER TABLE posts RENAME TO posts_legacy_0003")
+    conn.execute("PRAGMA legacy_alter_table = OFF")
+    conn.execute(create_posts)
+    cols = ", ".join(_writable_columns(conn, "posts_legacy_0003"))
+    conn.execute(f"INSERT INTO posts ({cols}) SELECT {cols} FROM posts_legacy_0003")
+    conn.execute("DROP TABLE posts_legacy_0003")
+    for trigger in triggers:
+        conn.execute(trigger)
+
+
+MIGRATIONS = {2: _0002_console_channel, 3: _0003_posts_extras}
+
+
 def migrate(conn: sqlite3.Connection) -> None:
     """Apply every migration after the database's version; a fresh or current one is untouched."""
     if not 0 < current_version(conn) < LATEST:
         return
+    # 0003 rebuilds `posts`. foreign_keys cannot be changed inside a transaction.
+    fk = int(conn.execute("PRAGMA foreign_keys").fetchone()[0])
+    if fk:
+        conn.execute("PRAGMA foreign_keys = OFF")
     conn.execute("BEGIN IMMEDIATE")
     try:
         for target in range(current_version(conn) + 1, LATEST + 1):
             MIGRATIONS[target](conn)
             conn.execute(f"PRAGMA user_version = {target}")
+        if conn.execute("PRAGMA foreign_key_check").fetchall():
+            raise sqlite3.DatabaseError("foreign_key_check failed after a schema migration")
         conn.execute("COMMIT")
     except BaseException:
         if conn.in_transaction:
             conn.execute("ROLLBACK")
         raise
+    finally:
+        if fk:
+            conn.execute("PRAGMA foreign_keys = ON")

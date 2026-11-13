@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -89,7 +90,7 @@ def test_dry_run_changes_nothing(
     before = (home / "brand.db").read_bytes()
     code, out = migrate_cli(capsys, EXAMPLE, "--dry-run")
     assert code == 0 and out["ok"] is True and out["dry_run"] is True
-    assert [i["id"] for i in out["imported"]] == [f"p000{n}" for n in range(1, 7)]
+    assert [i["id"] for i in out["imported"]] == [f"p000{n}" for n in range(1, 9)]
     assert out["out"] is None
     assert (home / "brand.db").read_bytes() == before
     assert not (home / "migrate_not_imported.json").exists()
@@ -155,20 +156,26 @@ def test_approved_skipped_and_not_imported(
     ex8 = conn.execute("SELECT * FROM posts WHERE legacy_id = 'ex-008'").fetchone()
     assert (ex8["status"], ex8["cancel_kind"]) == ("cancelled", "plan")
     assert ex8["closed_at"] is not None
-    conn.close()
-    assert {n["legacy_id"]: n["reason"] for n in out["not_imported"]} == {
-        "ex-006": "idea",
-        "ex-007": "draft",
-    }
+    assert out["not_imported"] == []
     saved = json.loads((home / "migrate_not_imported.json").read_text(encoding="utf-8"))
-    by_id = {n["legacy_id"]: n for n in saved["not_imported"]}
-    assert by_id["ex-007"]["title"] == "Example draft: event recap"
-    assert by_id["ex-007"]["body"] == "Draft text for a fake event recap."
-    assert by_id["ex-007"]["assets"] == ["drafts/example-event-recap.md"]
-    assert by_id["ex-006"]["notes"] == "Rough idea only."
+    assert saved["not_imported"] == []
+    idea = conn.execute("SELECT * FROM posts WHERE legacy_id = 'ex-006'").fetchone()
+    draft = conn.execute("SELECT * FROM posts WHERE legacy_id = 'ex-007'").fetchone()
+    assert idea["status"] == "pending_approval" and idea["window"] is None
+    assert json.loads(idea["extras"])["v1_status"] == "idea"
+    assert idea["notes"] == "Rough idea only."
+    assert draft["status"] == "pending_approval"
+    assert json.loads(draft["extras"])["v1_status"] == "draft"
+    assert json.loads(draft["extras"])["assets"] == ["drafts/example-event-recap.md"]
+    assert draft["source_doc"] == "drafts/example-event-recap.md"
+    parts = conn.execute(
+        "SELECT text FROM parts WHERE post_id = ? ORDER BY pos", (draft["id"],)
+    ).fetchall()
+    assert [r[0] for r in parts] == ["Draft text for a fake event recap."]
+    conn.close()
 
 
-def test_approved_without_window_is_not_imported(
+def test_approved_without_window_is_imported(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     setup_home(tmp_path, monkeypatch)
@@ -178,8 +185,12 @@ def test_approved_without_window_is_not_imported(
         item(id="b", status="skipped", date=""),
     )
     _, out = migrate_cli(capsys, path)
-    assert out["imported"] == []
-    assert {n["reason"] for n in out["not_imported"]} == {"needs a date and window"}
+    assert {i["legacy_id"]: i["status"] for i in out["imported"]} == {
+        "a": "pending_approval",
+        "b": "cancelled",
+    }
+    assert out["not_imported"] == []
+    assert {n["legacy_id"] for n in out["needs_window"]} == {"a"}
 
 
 def test_thread_is_split_in_order(
@@ -217,7 +228,7 @@ def test_empty_body_uses_title_and_single_marker_is_text(
         " ON t.post_id = p.id ORDER BY p.id"
     ).fetchall()
     assert [tuple(r) for r in rows] == [
-        ("a", "text", "only-a-title", "Only a title"),
+        ("a", "text", "only-a-title", ""),
         ("b", "text", "other", "Just one"),
     ]
     conn.close()
@@ -269,7 +280,13 @@ def test_missing_url_and_assets(
     ]
     conn = db_of(home)
     post = conn.execute("SELECT * FROM posts").fetchone()
-    assert post["source_doc"] == "drafts/a.md" and "drafts/b.MD" in post["notes"]
+    assert post["source_doc"] == "drafts/a.md" and post["notes"] is None
+    assert json.loads(post["extras"])["assets"] == [
+        "images/a.jpg",
+        "drafts/a.md",
+        "drafts/b.MD",
+        "c.png",
+    ]
     assert conn.execute("SELECT COUNT(*) FROM media").fetchone()[0] == 0
     conn.close()
 
@@ -299,10 +316,10 @@ def test_rerun_skips_and_ids_continue(
     with added.open(encoding="utf-8") as fh:
         monkeypatch.setattr("sys.stdin", fh)
         _, res = run(capsys, "add", "--as", "writer-1")
-    assert res["id"] == "p0007"
+    assert res["id"] == "p0009"
     path = v1_file(tmp_path, item(id="new-1"))
     _, third = migrate_cli(capsys, path)
-    assert third["imported"] == [{"legacy_id": "new-1", "id": "p0008", "status": "published"}]
+    assert third["imported"] == [{"legacy_id": "new-1", "id": "p0010", "status": "published"}]
 
 
 def test_writer_cannot_migrate_admin_can(
@@ -344,4 +361,165 @@ def test_owner_option_and_missing_agents(
     assert code == 0 and (tmp_path / "o.json").is_file()
     conn = db_of(home)
     assert conn.execute("SELECT owner FROM posts").fetchone()[0] == "manager-1"
+    conn.close()
+
+
+TEAM_SHAPED = Path(__file__).resolve().parent / "fixtures" / "v1_team_shaped.json"
+
+
+def _reconstruct(post: Mapping[str, Any] | Any) -> dict[str, Any]:
+    extras = json.loads(post["extras"])
+    item: dict[str, Any] = {
+        "id": post["legacy_id"],
+        "platform": post["platform"],
+        "status": extras["v1_status"],
+        "date": extras["date"],
+        "window": extras["window"],
+        "title": post["title"],
+        "body": extras["body"],
+        "first_comment": extras["first_comment"],
+        "assets": extras["assets"],
+        "approved_on": extras["approved_on"],
+        "posted_at": extras["posted_at"],
+        "notes": post["notes"] or "",
+    }
+    if "url" in extras:
+        item["url"] = extras["url"]
+    if "posted_url" in extras:
+        item["posted_url"] = extras["posted_url"]
+    if "unknown" in extras:
+        item.update(extras["unknown"])
+    return item
+
+
+def test_bare_array_and_items_object_match(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    setup_home(tmp_path, monkeypatch)
+    items = json.loads(TEAM_SHAPED.read_text(encoding="utf-8"))
+    bare = tmp_path / "bare.json"
+    wrapped = tmp_path / "wrapped.json"
+    bare.write_text(json.dumps(items), encoding="utf-8")
+    wrapped.write_text(json.dumps({"items": items, "calendar": "Example Co"}), encoding="utf-8")
+    _, a = migrate_cli(capsys, bare, "--dry-run")
+    _, b = migrate_cli(capsys, wrapped, "--dry-run")
+    assert a["imported"] == b["imported"]
+    assert a["not_imported"] == b["not_imported"] == []
+    assert a["unknown_fields"] == b["unknown_fields"]
+
+
+def test_team_shaped_fixture_round_trip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    home = setup_home(tmp_path, monkeypatch)
+    original = json.loads(TEAM_SHAPED.read_text(encoding="utf-8"))
+    code, out = migrate_cli(capsys, TEAM_SHAPED)
+    assert code == 0 and out["not_imported"] == []
+    assert len(out["imported"]) == len(original)
+    conn = db_of(home)
+    rows = {r["legacy_id"]: r for r in conn.execute("SELECT * FROM posts")}
+    assert set(rows) == {item["id"] for item in original}
+    for item in original:
+        assert _reconstruct(rows[item["id"]]) == item
+    comment = rows["2026-02-07-li-example-comment"]
+    assert comment["first_comment"] == "Thanks for reading. More at https://example.com/follow-up."
+    missing = rows["2026-02-05-li-example-no-posted-at"]
+    assert missing["status"] == "published"
+    assert missing["published_at"] == "2026-02-05T00:00:00+03:00"
+    assert missing["platform_url"] is None
+    assert {n["legacy_id"] for n in out["missing_posted_at"]} == {
+        "2026-02-05-li-example-no-posted-at"
+    }
+    assert {n["legacy_id"] for n in out["missing_url"]} >= {
+        "2026-02-05-li-example-no-posted-at",
+        "2026-02-08-li-example-carousel",
+    }
+    idea = rows["2026-04-01-li-example-idea"]
+    assert idea["status"] == "pending_approval" and idea["window"] is None
+    unknown = rows["2026-02-10-li-example-unknown"]
+    assert json.loads(unknown["extras"])["unknown"] == {"colour": "blue"}
+    assert out["unknown_fields"] == [
+        {
+            "id": unknown["id"],
+            "legacy_id": "2026-02-10-li-example-unknown",
+            "keys": ["colour"],
+        }
+    ]
+    url_item = rows["2026-02-09-x-example-url-key"]
+    assert url_item["platform_url"] == "https://example.com/posts/ex-url-key"
+    empty = rows["2026-02-06-x-example-empty-body"]
+    part = conn.execute("SELECT text FROM parts WHERE post_id = ?", (empty["id"],)).fetchone()
+    assert part[0] == ""
+    report = audit.audit(conn, home)
+    assert report["ok"] is True, report["flags"]
+    conn.close()
+
+
+def test_posted_url_and_url_conflict_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    setup_home(tmp_path, monkeypatch)
+    path = v1_file(
+        tmp_path,
+        item(
+            url="https://example.com/a",
+            posted_url="https://example.com/b",
+        ),
+    )
+    code, out = migrate_cli(capsys, path)
+    assert code == 2 and out["error"]["code"] == "BAD_ARGS"
+    assert "differ" in out["error"]["message"]
+
+
+def test_unknown_unserializable_field_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from brandcal.errors import BrandcalError, ErrorCode
+    from brandcal.migrate_v1 import plan
+
+    home = setup_home(tmp_path, monkeypatch)
+    cfg = json.loads((home / "config.json").read_text(encoding="utf-8"))
+    bad = item()
+    bad["flag"] = {1, 2, 3}
+    with pytest.raises(BrandcalError) as err:
+        plan({"items": [bad]}, cfg, [])
+    assert err.value.code == ErrorCode.BAD_ARGS
+    assert "unknown fields" in err.value.message
+
+
+def test_twenty_nine_item_bare_array_all_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    home = setup_home(tmp_path, monkeypatch)
+    statuses = ["posted"] * 22 + ["draft"] * 4 + ["approved"] * 2 + ["idea"]
+    items = []
+    for i, status in enumerate(statuses, 1):
+        day = 1 + (i % 27)
+        row = item(
+            id=f"2026-05-{day:02d}-li-example-{i:02d}",
+            status=status,
+            date="" if status == "idea" else f"2026-05-{day:02d}",
+            window="" if status in ("idea", "draft") and i % 2 == 0 else "07:30-08:30",
+            title=f"Example Co synthetic item {i}",
+            body="" if i % 3 == 0 else f"Fake body for Example Co item {i}.",
+            first_comment="",
+            assets=[f"images/example-{i}.jpg"] if i % 4 == 0 else [],
+            approved_on="2026-05-01" if status in ("posted", "approved") and i % 2 else "",
+            posted_url=f"https://example.com/posts/ex-{i}" if status == "posted" and i % 5 else "",
+            posted_at=(f"2026-05-{day:02d}T07:30" if status == "posted" and i % 3 else ""),
+            notes="" if i % 7 else f"Note {i}.",
+            url="",
+        )
+        # Team-shaped rows use posted_url, not url.
+        row.pop("url")
+        items.append(row)
+    path = tmp_path / "twenty_nine.json"
+    path.write_text(json.dumps(items), encoding="utf-8")
+    code, out = migrate_cli(capsys, path)
+    assert code == 0 and len(out["imported"]) == 29 and out["not_imported"] == []
+    conn = db_of(home)
+    rows = {r["legacy_id"]: r for r in conn.execute("SELECT * FROM posts")}
+    assert len(rows) == 29
+    for original in items:
+        assert _reconstruct(rows[original["id"]]) == original
     conn.close()
