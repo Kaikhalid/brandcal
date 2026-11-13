@@ -140,7 +140,6 @@ Requires Python 3.11 or newer. brandcal uses only the standard library at runtim
 ```sh
 git clone https://github.com/Kaikhalid/brandcal.git
 cd brandcal
-git switch work
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 
