@@ -26,6 +26,7 @@ Exit 0 is success and exit 1 is never used deliberately (it means an unexpected 
 | 4 | `BAD_ORIGIN` | A write came from an origin or host that serve.allowed_origins does not list. |
 | 4 | `COMMENT_NOT_DELEGATED` | Agents never post comments unless a human has delegated that exact comment. |
 | 4 | `CONNECTOR_REFUSED` | The relay refused the connector's credentials (HTTP 401 or 403, or close 4003). |
+| 4 | `CONSOLE_DISABLED` | A console decision was refused because serve.console_approvals is not true. |
 | 4 | `IDENTITY_UNMAPPED` | The identity is verified but is not listed as an approver or viewer in serve.approvers. |
 | 4 | `IDENTITY_UNVERIFIED` | No verified identity (Access JWT) backs this decision; the CLI and dev mode cannot decide. |
 | 4 | `ROLE_NOT_ALLOWED` | The acting agent's role may not do this. |

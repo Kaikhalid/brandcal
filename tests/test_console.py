@@ -77,7 +77,7 @@ def test_console_needs_an_approver_and_a_console_agent(home: Path) -> None:
         console_approve(home, post, Identity("manager-1", APPROVER.verified))
     assert code_of(err) is ErrorCode.ROLE_NOT_ALLOWED
     with open_home(home) as (conn, cfg):
-        cfg["serve"] = {}
+        cfg["serve"] = {"console_approvals": True}
         with pytest.raises(BrandcalError) as err:
             actions.approve(conn, cfg, APPROVER, "p0001", 1, post["hash"], "console", "b", "w")
         assert code_of(err) is ErrorCode.BAD_ARGS and "console_agent" in err.value.next_step
@@ -293,6 +293,7 @@ def test_console_refuses_an_empty_verified_email(home: Path) -> None:
         (ErrorCode.BAD_ORIGIN, ExitCode.NOT_ALLOWED),
         (ErrorCode.REASON_REQUIRED, ExitCode.VALIDATION),
         (ErrorCode.EXTRA_NOT_INSTALLED, ExitCode.USAGE),
+        (ErrorCode.CONSOLE_DISABLED, ExitCode.NOT_ALLOWED),
     ],
 )
 def test_new_error_codes(code: ErrorCode, exit_code: ExitCode) -> None:
@@ -300,3 +301,63 @@ def test_new_error_codes(code: ErrorCode, exit_code: ExitCode) -> None:
     err = BrandcalError(code, "m", "n")
     assert err.exit_code == int(exit_code) and err.to_dict()["error"]["code"] == code.value
     assert f"`{code.value}`" in Path("docs/ERRORS.md").read_text(encoding="utf-8")
+
+
+def _serve_with_flag(
+    cfg: dict[str, Any], value: object | None = None, *, present: bool = True
+) -> dict[str, Any]:
+    serve = dict(cfg.get("serve") or {})
+    if not present:
+        serve.pop("console_approvals", None)
+    else:
+        serve["console_approvals"] = value
+    return {**cfg, "serve": serve}
+
+
+def test_console_approve_refused_when_flag_absent(home: Path) -> None:
+    post = add_post(home)
+    with open_home(home) as (conn, cfg):
+        cfg = _serve_with_flag(cfg, present=False)
+        with pytest.raises(BrandcalError) as err:
+            actions.approve(
+                conn, cfg, APPROVER, post["id"], post["version"], post["hash"], "console",
+                "console-approve", "Approve",
+            )  # fmt: skip
+        assert code_of(err) is ErrorCode.CONSOLE_DISABLED
+        assert conn.execute("SELECT count(*) AS n FROM approvals").fetchone()["n"] == 0
+
+
+def test_console_approve_refused_when_flag_false(home: Path) -> None:
+    post = add_post(home)
+    with open_home(home) as (conn, cfg):
+        cfg = _serve_with_flag(cfg, False)
+        with pytest.raises(BrandcalError) as err:
+            actions.approve(
+                conn, cfg, APPROVER, post["id"], post["version"], post["hash"], "console",
+                "console-approve", "Approve",
+            )  # fmt: skip
+        assert code_of(err) is ErrorCode.CONSOLE_DISABLED
+        assert conn.execute("SELECT count(*) AS n FROM approvals").fetchone()["n"] == 0
+
+
+def test_console_flag_ignores_string_true_and_one(home: Path) -> None:
+    post = add_post(home)
+    with open_home(home) as (conn, cfg):
+        for value in ("true", 1):
+            flagged = _serve_with_flag(cfg, value)
+            with pytest.raises(BrandcalError) as err:
+                actions.approve(
+                    conn, flagged, APPROVER, post["id"], post["version"], post["hash"],
+                    "console", "console-approve", "Approve",
+                )  # fmt: skip
+            assert code_of(err) is ErrorCode.CONSOLE_DISABLED
+        assert conn.execute("SELECT count(*) AS n FROM approvals").fetchone()["n"] == 0
+
+
+def test_console_actions_disabled_when_flag_off(home: Path) -> None:
+    post = add_post(home)
+    with open_home(home) as (conn, cfg):
+        cfg = _serve_with_flag(cfg, present=False)
+        shown = {a["id"]: a for a in actions.post_actions(post, cfg, "approver")}
+        assert shown["approve"]["enabled"] is False
+        assert shown["approve"]["refusal"]["code"] == "CONSOLE_DISABLED"

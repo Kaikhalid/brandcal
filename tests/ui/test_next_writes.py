@@ -33,7 +33,7 @@ from test_next_home import (  # noqa: E402, F401  (fixtures are used by name)
     open_page,
     shot,
 )
-from test_screens import WEEK, load_demo  # noqa: E402
+from test_screens import WEEK, build_demo  # noqa: E402
 
 from brandcal import posts, serve  # noqa: E402
 from brandcal.config import display_tz, load_config  # noqa: E402
@@ -48,7 +48,7 @@ FUTURE = "2027-03-02T09:00:00+01:00/2027-03-02T10:00:00+01:00"
 @pytest.fixture(scope="module")
 def home(tmp_path_factory: pytest.TempPathFactory) -> Path:
     path = tmp_path_factory.mktemp("demo-writes") / "home"
-    load_demo().build(path, WEEK)
+    build_demo(path, WEEK)
     return path
 
 

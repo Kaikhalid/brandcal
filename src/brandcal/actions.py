@@ -17,7 +17,7 @@ from typing import Any
 
 from brandcal import approvals, archive, posts, reports
 from brandcal import audit as audit_mod
-from brandcal.approvals import CONSOLE_SOURCE, Verified
+from brandcal.approvals import CONSOLE_SOURCE, Verified, console_approvals_enabled
 from brandcal.config import display_tz
 from brandcal.errors import EXIT_CODES, BrandcalError, ErrorCode
 from brandcal.timefmt import parse_time
@@ -219,7 +219,16 @@ def _item(
             "Ask the admin to list you in serve.approvers.",
         )
     else:
-        why = _blocked(button, post, cfg)
+        if button in ("approve", "request-changes", "reschedule", "cancel") and (
+            not console_approvals_enabled(cfg)
+        ):
+            why = BrandcalError(
+                ErrorCode.CONSOLE_DISABLED,
+                f"A console decision ({button}) is disabled until serve.console_approvals is true.",
+                "Set serve.console_approvals to true in config.json (see docs/UI_SPEC.md).",
+            )
+        else:
+            why = _blocked(button, post, cfg)
     item: dict[str, object] = {
         "id": button,
         "label": label,

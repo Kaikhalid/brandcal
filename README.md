@@ -128,6 +128,10 @@ agreed, the manager records it with the same version and hash, for example
 `brandcal approve p0001 --version 1 --hash <hash> --channel card --msg msg-001 --words "Approved" --as manager-1`.
 The post can then be scheduled or published inside its approved window.
 
+The web UI (`brandcal serve`) can also record a console approval, but only when
+`serve.console_approvals` is `true` in `config.json`. The flag is off by default.
+Turning it on is an owner decision; see [docs/UI_SPEC.md](docs/UI_SPEC.md) section 3.
+
 ## Install and development
 
 Requires Python 3.11 or newer. brandcal uses only the standard library at runtime

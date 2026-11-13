@@ -42,6 +42,12 @@ class Verified:
 CONSOLE_SOURCE = "access-jwt"
 
 
+def console_approvals_enabled(cfg: Mapping[str, Any]) -> bool:
+    """True only when serve.console_approvals is the JSON boolean true (UI_SPEC 2.6)."""
+    serve = cfg.get("serve")
+    return isinstance(serve, Mapping) and serve.get("console_approvals") is True
+
+
 def _console(role: str, cfg: Mapping[str, Any], verified: Verified | None, what: str) -> str:
     """Gate a console decision (UI_SPEC 3.1); return the console recorder agent's id."""
     if verified is None or verified.source != CONSOLE_SOURCE or not verified.identity.strip():
@@ -56,6 +62,12 @@ def _console(role: str, cfg: Mapping[str, Any], verified: Verified | None, what:
             ErrorCode.ROLE_NOT_ALLOWED,
             f"Role {role} may not decide in the console.",
             "Sign in as an approver.",
+        )
+    if not console_approvals_enabled(cfg):
+        raise BrandcalError(
+            ErrorCode.CONSOLE_DISABLED,
+            f"A console decision ({what}) is disabled until serve.console_approvals is true.",
+            "Set serve.console_approvals to true in config.json (see docs/UI_SPEC.md).",
         )
     serve = cfg.get("serve")
     agent = serve.get("console_agent") if isinstance(serve, Mapping) else None
