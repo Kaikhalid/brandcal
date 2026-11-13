@@ -39,4 +39,19 @@ describe("hibernation", () => {
     fake.send(encode(T.PROOF, 0, await proof(utf8(SECRET), nonce)));
     expect(decodeJson((await fake.nextOf(T.READY)).payload).v).toBe(1);
   });
+
+  it("keeps the stream id counter across eviction", async () => {
+    const fake = await Fake.ready();
+    const first = browser("/first");
+    const req1 = await fake.nextOf(T.REQ);
+    expect(req1.stream).toBe(1);
+    fake.respond(req1.stream, 200, [], [utf8("first")]);
+    expect(await (await first).text()).toBe("first");
+    await evictDurableObject(stub());
+    const second = browser("/second");
+    const req2 = await fake.nextOf(T.REQ);
+    expect(req2.stream).toBe(2);
+    fake.respond(req2.stream, 200, [], [utf8("second")]);
+    expect(await (await second).text()).toBe("second");
+  });
 });
