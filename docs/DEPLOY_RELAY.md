@@ -28,7 +28,8 @@ browser ──https──▶ Access (browser host) ──▶ Worker ──▶ Du
 
 - `brandcal relay` dials out and keeps one WebSocket open. The Worker sends each browser request
   down it; the connector replays it against `brandcal serve` on `127.0.0.1` and streams the
-  answer back.
+  answer back. The Durable Object stores the stream id counter in the socket's attachment so the
+  count survives hibernation.
 - Cloudflare Access stays in front of the browser host. The Worker only checks that a
   `Cf-Access-Jwt-Assertion` header is present and shaped like a JWT; **`brandcal serve` verifies
   it**, exactly as behind the tunnel. That check is the one that counts: brandcal accepts a token
@@ -214,12 +215,12 @@ self-contained HTML page; `/api/*` gets brandcal's error shape
 | 502 | `RELAY_BAD_FRAME` | The connector refused the request (for example a wrong Host) or sent a malformed frame |
 | 502 | `RELAY_DROPPED` | The socket dropped mid-request. For a POST: "Your change may or may not have been saved: reload to check before trying again." |
 | 503 | `RELAY_OFFLINE` | No connector, or its last pong is older than 90 s (`Retry-After: 30`) |
-| 503 | `RELAY_BUSY` | 16 requests already in flight |
+| 503 | `RELAY_BUSY` | 16 requests already in flight (`Retry-After: 5`) |
 | 504 | `RELAY_TIMEOUT` | No response head within 30 s, a 30 s gap between chunks, or brandcal took longer than 25 s |
 
 `GET /_relay/health` (behind Access) returns
 `{"ok":true,"connected":true,"connected_since":"2026-10-24T09:15:02+03:00","last_pong_age_s":12,"agent":"brandcal-relay/x.y","in_flight":0}`,
-or 503 with `connected:false` when the connector is away.
+or 503 with `ok:true` and `connected:false` when the connector is away.
 
 ## 8. Troubleshooting
 
