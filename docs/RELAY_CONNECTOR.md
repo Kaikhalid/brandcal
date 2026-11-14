@@ -86,7 +86,11 @@ JSON line goes to stdout on exit.
 Any other disconnect reconnects with exponential backoff and full jitter: a random delay up to
 1 s, doubling to 60 s, reset after 5 minutes connected. A supervisor script must not restart
 the connector after exit 2, 4 or 8. Liveness: a protocol ping every 20 s, the text `ping` every
-60 s, and a reconnect after 45 s without any frame.
+20 s, and a reconnect after 60 s without an app-level message (a text `pong` or a binary frame).
+Protocol pongs do not count, because Cloudflare's edge can answer them after the Durable Object
+has dropped the socket (a half-open link). Set
+`BRANDCAL_RELAY_HEARTBEAT` to a file path and the connector touches that file (at most every 5 s)
+on each app-level message, so an outside watchdog can restart a connector that has gone quiet.
 
 ## Log format
 
