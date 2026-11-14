@@ -65,12 +65,13 @@ def next_for(
     if role is None:
         raise BrandcalError(ErrorCode.NO_AGENT, f"Unknown agent '{agent}'.", "Check --as NAME.")
     at = _now(now)
-    items: list[tuple[datetime, dict[str, Any]]] = []
+    items: list[dict[str, Any]] = []
     for p in conn.execute(
         "SELECT * FROM posts WHERE status NOT IN ('published', 'cancelled')"
-        " ORDER BY window_start_utc, id"
+        " ORDER BY window_start_utc IS NULL, window_start_utc, id"
     ):
-        pid, status, start = p["id"], p["status"], _start(p)
+        pid, status = p["id"], p["status"]
+        start = _utc(p["window_start_utc"])  # None: an idea or imported post with no slot yet
         row = short_row(p)
         if role == "writer" and status == "changes_requested" and p["owner"] == agent:
             row["next"] = f"brandcal edit {pid} ... then brandcal submit {pid}"
@@ -81,6 +82,8 @@ def next_for(
             row["next"] = f"brandcal preview {pid}"
         elif role != "manager":
             continue
+        elif start is None:
+            continue  # nothing is due for the manager until the post has a slot
         elif status == "approved" and start <= at + SOON:
             if p["native_scheduled_at"]:
                 row["next"] = f"confirm it went live, then brandcal published {pid} URL"
@@ -88,16 +91,15 @@ def next_for(
                 row["next"] = f"brandcal begin {pid}"
         elif status == "missed":
             end = _utc(p["window_end_utc"])
-            assert end is not None
-            if end < at - timedelta(days=STALE_DAYS):
+            if end is not None and end < at - timedelta(days=STALE_DAYS):
                 row["stale"] = True
             row["next"] = f"brandcal reschedule {pid} ... or brandcal cancel {pid} ..."
         elif status == "pending_approval" and start <= at + SOON:
             row["next"] = "chase the approver"
         else:
             continue
-        items.append((start, row))
-    return [row for _, row in items[:LIMIT]]
+        items.append(row)
+    return items[:LIMIT]
 
 
 def _local_day(post: sqlite3.Row, cfg: Mapping[str, Any]) -> date:
