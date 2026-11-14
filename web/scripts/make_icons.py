@@ -1,42 +1,76 @@
-"""Regenerate the app icons: python3 web/scripts/make_icons.py (needs Pillow).
+"""Rebuild the app icons from the source artwork (needs Pillow and numpy).
 
-Obsidian square with a warm stone calendar and a check. iOS rounds the corners itself,
-so the square is full bleed and opaque.
+    python3 web/scripts/make_icons.py path/to/artwork-1024.png
+
+The artwork is a rounded-square icon on a transparent background. iOS applies its own
+rounded mask, so the calendar is cut out and placed on a purple-to-blue fill that runs into
+every corner: full bleed, opaque, no bezel. The maskable icon keeps the calendar inside the
+central 80% safe zone.
 """
 
+import sys
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+import numpy as np
+from PIL import Image, ImageDraw, ImageFilter
 
-OBSIDIAN = (18, 19, 22)
-STONE = (246, 244, 240)
-SIZE = 1024 * 4  # drawn large, then scaled down for smooth edges
-U = SIZE / 1024
 WEB = Path(__file__).resolve().parent.parent
+CX, CY = 513, 507  # calendar centre in the 1024px artwork
 
 
-def box(x0: float, y0: float, x1: float, y1: float) -> list[float]:
-    return [x0 * U, y0 * U, x1 * U, y1 * U]
+def calendar_mask() -> Image.Image:
+    """The calendar shape in artwork pixels, slightly generous for its outline glow."""
+    m = Image.new("L", (1024, 1024), 0)
+    d = ImageDraw.Draw(m)
+    d.rounded_rectangle([224, 264, 801, 414], radius=46, fill=255)
+    d.rounded_rectangle([224, 418, 802, 810], radius=50, fill=255)
+    d.rectangle([228, 400, 798, 430], fill=255)
+    for x0, x1 in ((334, 416), (614, 694)):
+        d.rounded_rectangle([x0, 204, x1, 344], radius=41, fill=255)
+    return m.filter(ImageFilter.GaussianBlur(2.5))
 
 
-def main() -> None:
-    im = Image.new("RGB", (SIZE, SIZE), OBSIDIAN)
-    d = ImageDraw.Draw(im)
-    d.rounded_rectangle(box(232, 276, 792, 800), radius=72 * U, fill=STONE)
-    d.rectangle(box(232, 400, 792, 428), fill=OBSIDIAN)  # header divider
-    for x in (372, 652):  # binder rings, with a dark halo so they read at small sizes
-        d.rounded_rectangle(box(x - 46, 196, x + 46, 352), radius=46 * U, fill=OBSIDIAN)
-        d.rounded_rectangle(box(x - 24, 214, x + 24, 334), radius=24 * U, fill=STONE)
-    pts = [(392, 612), (482, 698), (640, 530)]
-    d.line([(x * U, y * U) for x, y in pts], fill=OBSIDIAN, width=int(64 * U), joint="curve")
-    for x, y in (pts[0], pts[-1]):
-        d.ellipse(box(x - 32, y - 32, x + 32, y + 32), fill=OBSIDIAN)
-    big = im.resize((1024, 1024), Image.LANCZOS)
-    for name, size in (("apple-touch-icon.png", 180), ("icon-192.png", 192), ("icon-512.png", 512)):
-        big.resize((size, size), Image.LANCZOS).save(WEB / "public" / name, optimize=True)
-    small = big.convert("RGBA").resize((48, 48), Image.LANCZOS)
-    small.save(WEB / "app" / "favicon.ico", sizes=[(16, 16), (32, 32), (48, 48)])
+def background(n: int) -> Image.Image:
+    yy, xx = np.mgrid[0:n, 0:n].astype(np.float32) / (n - 1)
+    t = np.clip((xx + (1 - yy)) / 2, 0, 1)[..., None]  # 0 bottom-left, 1 top-right
+    purple = np.array([78, 36, 170], np.float32)
+    blue = np.array([70, 120, 235], np.float32)
+    deep = np.array([48, 20, 110], np.float32)
+    shade = 0.35 * (yy[..., None] ** 2)
+    bg = (purple * (1 - t) + blue * t) * (1 - shade) + deep * shade
+    sheen = np.exp(-(((xx - yy) - 0.35) ** 2) / 0.01)[..., None] * (1 - yy[..., None]) * 18
+    return Image.fromarray(np.clip(bg + sheen, 0, 255).astype(np.uint8))
+
+
+def render(art: Image.Image, half: int) -> Image.Image:
+    box = (CX - half, CY - half, CX + half, CY + half)
+    fg = art.crop(box)
+    fm = calendar_mask().crop(box)
+    n = fg.size[0]
+    shadow = Image.new("L", (n, n), 0)
+    shadow.paste(fm, (0, 14))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(22)).point(lambda v: int(v * 0.55))
+    bg = Image.composite(Image.new("RGB", (n, n), (20, 8, 50)), background(n), shadow)
+    return Image.composite(fg, bg, fm).resize((1024, 1024), Image.LANCZOS)
+
+
+def palette(im: Image.Image) -> Image.Image:
+    method, dither = Image.Quantize.MEDIANCUT, Image.Dither.FLOYDSTEINBERG
+    return im.quantize(colors=256, method=method, dither=dither)
+
+
+def main(source: str) -> None:
+    art = Image.open(source).convert("RGBA").convert("RGB")
+    icon, maskable = render(art, 400), render(art, 560)
+    public = WEB / "public"
+    icon.resize((180, 180), Image.LANCZOS).save(public / "apple-touch-icon.png", optimize=True)
+    icon.resize((192, 192), Image.LANCZOS).save(public / "icon-192.png", optimize=True)
+    palette(icon.resize((512, 512), Image.LANCZOS)).save(public / "icon-512.png", optimize=True)
+    small = palette(maskable.resize((512, 512), Image.LANCZOS))
+    small.save(public / "icon-maskable-512.png", optimize=True)
+    fav = icon.convert("RGBA").resize((48, 48), Image.LANCZOS)
+    fav.save(WEB / "app" / "favicon.ico", sizes=[(16, 16), (32, 32), (48, 48)])
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1])
