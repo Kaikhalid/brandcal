@@ -58,6 +58,7 @@ STATIC_TYPES = {
     ".ico": "image/x-icon",
     ".png": "image/png",
     ".json": "application/json",
+    ".webmanifest": "application/manifest+json",
 }
 CSP_FILE = "csp.json"  # written by web/scripts/postbuild.mjs: page -> hashes of its inline code
 DEFAULT_CSP = "default-src 'self'"
