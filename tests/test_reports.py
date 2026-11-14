@@ -264,3 +264,11 @@ def test_render_week_shows_times_in_the_display_timezone(db: sqlite3.Connection)
     make_post(db, window=win(day, hour=1, off="-05:00"))  # 01:00-05:00 is 09:00+03:00
     page = reports.render_week(db, CFG, NOW)
     assert "09:00" in page and "01:00" not in page
+
+
+def test_next_skips_slotless_posts_for_the_manager(db: sqlite3.Connection) -> None:
+    """Imported or idea posts with no slot yet must not crash next (they sort last)."""
+    make_post(db, id="p0001", window=None, legacy_id="v1-a")
+    make_post(db, id="p0003", status="approved")
+    assert [r["id"] for r in reports.next_for(db, CFG, "manager-1", NOW)] == ["p0003"]
+    assert [r["id"] for r in reports.next_for(db, CFG, "approver-1", NOW)] == ["p0001"]
