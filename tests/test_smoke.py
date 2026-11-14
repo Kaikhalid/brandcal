@@ -7,7 +7,7 @@ from brandcal.errors import EXIT_CODES, ErrorCode, ExitCode, exit_code_for
 
 
 def test_version() -> None:
-    assert brandcal.__version__ == "0.1.1"
+    assert brandcal.__version__ == "0.1.2"
 
 
 def test_cli_version(capsys) -> None:  # type: ignore[no-untyped-def]
@@ -15,14 +15,14 @@ def test_cli_version(capsys) -> None:  # type: ignore[no-untyped-def]
         cli.main(["--version"])
     except SystemExit as exc:
         assert exc.code == 0
-    assert "brandcal 0.1.1" in capsys.readouterr().out
+    assert "brandcal 0.1.2" in capsys.readouterr().out
 
 
 def test_cli_version_subprocess() -> None:
     out = subprocess.run(
         [sys.executable, "-m", "brandcal", "--version"], capture_output=True, text=True, check=True
     )
-    assert out.stdout.strip() == "brandcal 0.1.1"
+    assert out.stdout.strip() == "brandcal 0.1.2"
 
 
 def test_cli_help_exits_zero(capsys) -> None:  # type: ignore[no-untyped-def]

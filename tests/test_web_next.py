@@ -69,6 +69,7 @@ def tree(tmp_path: Path) -> Path:
         "logo.svg": b"<svg/>",
         "favicon.ico": b"\0\0\1\0",
         "icon.png": b"\x89PNG",
+        "manifest.webmanifest": b"{}",
         "data.json": b"{}",
         "secret.map": b"{}",
         ".hidden.html": b"hidden",
@@ -135,6 +136,7 @@ def test_unknown_routes_are_the_json_404_and_never_redirect(port: int, path: str
         ("/logo.svg", "image/svg+xml"),
         ("/favicon.ico", "image/x-icon"),
         ("/icon.png", "image/png"),
+        ("/manifest.webmanifest", "application/manifest+json"),
         ("/data.json", "application/json"),
     ],
 )
@@ -302,6 +304,8 @@ def test_the_built_home_page_is_served_with_its_own_hashes(
         assert "'unsafe-inline'" not in policy and "'unsafe-eval'" not in policy
         favicon = 200 if (BUILT / "favicon.ico").exists() else 404
         assert fetch(number, "/favicon.ico").status == favicon
+        for name in ("apple-touch-icon.png", "manifest.webmanifest"):
+            assert fetch(number, f"/{name}").status == (200 if (BUILT / name).exists() else 404)
     finally:
         server.shutdown()
         server.server_close()
