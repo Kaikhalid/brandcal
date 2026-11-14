@@ -196,10 +196,12 @@ class FakeDO:
         secret: bytes = SECRET,
         *,
         answer: bool = True,
+        answer_text: bool = True,
         close_after_ready: int | None = None,
         **server: Any,
     ) -> None:
         self.secret, self.answer, self.close_after_ready = secret, answer, close_after_ready
+        self.answer_text = answer_text  # False: protocol pongs only, like a half-open edge
         self.connections = self.pings = self.texts = 0
         self.close_codes: list[int] = []
         self.hello: dict[str, Any] = {}
@@ -220,7 +222,7 @@ class FakeDO:
                 return relay.decode(payload)
             if op == 1:
                 self.texts += 1
-                if self.answer:
+                if self.answer and self.answer_text:
                     peer.send(1, b"pong")
             elif op == 9:
                 self.pings += 1

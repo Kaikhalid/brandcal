@@ -167,6 +167,31 @@ def test_no_frame_for_the_stale_limit_reconnects(rig: Callable[..., Rig]) -> Non
     assert any("error=Stale" in x for x in r.lines())
 
 
+def test_protocol_pongs_alone_do_not_keep_a_half_open_link_up(rig: Callable[..., Rig]) -> None:
+    # 2026-11-14: the edge kept answering protocol pings after the Durable Object had dropped
+    # the socket, so a link with no app-level reply stayed "up" for 40 minutes.
+    r = rig(
+        server={"answer_text": False},
+        timing=relay.Timing(ping=0.02, text_ping=0.05, stale=0.3, tick=0.02),
+        sleep=lambda s: time.sleep(0.01),
+    )
+    wait_until(lambda: r.do.connections >= 2)
+    assert r.do.pings >= 3  # protocol pongs were flowing the whole time
+    assert any("error=Stale" in x for x in r.lines())
+
+
+def test_app_level_replies_touch_the_heartbeat_file(
+    rig: Callable[..., Rig], tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(relay, "HEARTBEAT_EVERY", 0.0)
+    beat = tmp_path / "relay.heartbeat"
+    r = rig(timing=relay.Timing(ping=0.05, text_ping=0.05, stale=1.0, tick=0.02), heartbeat=beat)
+    wait_until(beat.exists)
+    first = beat.stat().st_mtime_ns
+    wait_until(lambda: r.do.texts >= 3)
+    wait_until(lambda: beat.stat().st_mtime_ns > first)
+
+
 # -- replay rules ---------------------------------------------------------------------------------
 
 
