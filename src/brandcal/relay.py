@@ -15,6 +15,7 @@ import hashlib
 import hmac
 import http.client
 import json
+import os
 import random
 import re
 import signal
@@ -169,6 +170,8 @@ RESPONSE_HEADERS = frozenset(
 UPSTREAM_HOST = "127.0.0.1"  # fixed: it cannot be configured
 DEFAULT_MAX_MB = 32
 POOL = 8
+HEARTBEAT_EVERY = 5.0  # seconds between touches of the watchdog heartbeat file
+HEARTBEAT_ENV = "BRANDCAL_RELAY_HEARTBEAT"  # path of that file; unset means none
 _BAD_PATH = re.compile(r"[\x00-\x20\x7f]")
 _TOKEN = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")
 _BAD_VALUE = re.compile(r"[\r\n\x00]")
@@ -296,9 +299,12 @@ class Timing:
     connect: float = 2.0  # to brandcal serve
     response: float = 25.0  # the whole answer from brandcal serve
     handshake: float = 10.0  # upgrade, challenge and ready
-    ping: float = 20.0  # protocol ping
-    text_ping: float = 60.0  # the text "ping" the Durable Object answers while hibernating
-    stale: float = 45.0  # reconnect if no frame at all for this long
+    ping: float = 20.0  # protocol ping (keeps NAT and proxies awake; the edge may answer it)
+    text_ping: float = 20.0  # the text "ping" the Durable Object's runtime answers with "pong"
+    # Reconnect if no app-level message (a text "pong" or a binary frame) arrives for this long.
+    # Protocol pongs do not count: Cloudflare's edge can answer them after the Durable Object
+    # has dropped the socket, which left a half-open link up for 40 minutes on 2026-11-14.
+    stale: float = 60.0
     tick: float = 0.25  # how often the read loop wakes to check the timers and the stop flag
 
 
@@ -334,7 +340,7 @@ class _Cancelled(Exception):
 
 
 class Stale(Exception):
-    """No frame at all arrived within ``Timing.stale``."""
+    """No app-level message (text "pong" or binary frame) arrived within ``Timing.stale``."""
 
 
 class _Stream:
@@ -424,6 +430,7 @@ class Connector:
         now: Callable[[], datetime] | None = None,
         out: TextIO | None = None,
         connect: Callable[..., wsclient.WebSocket] = wsclient.connect,
+        heartbeat: Path | None = None,
     ) -> None:
         self.settings, self.tz, self.timing = settings, tz, timing
         self._clock, self._rand, self._connect, self._out = clock, rand, connect, out
@@ -432,6 +439,15 @@ class Connector:
         self._sleep = sleep or self._stop.wait
         self._log_lock = threading.Lock()
         self._pool = ThreadPoolExecutor(max_workers=POOL, thread_name_prefix="relay")
+        self._heartbeat = heartbeat  # touched on app-level replies, for an outside watchdog
+        self._beat_at = -1e9
+
+    def _beat(self, now: float) -> None:
+        if self._heartbeat is None or now - self._beat_at < HEARTBEAT_EVERY:
+            return
+        self._beat_at = now
+        with contextlib.suppress(OSError):  # a watchdog file must never take the relay down
+            self._heartbeat.touch()
 
     def stop(self) -> None:
         self._stop.set()
@@ -518,14 +534,18 @@ class Connector:
     def _serve(self, link: _Link) -> None:
         ws, t, clock = link.ws, self.timing, self._clock
         last_rx = last_ping = last_text = clock()
-        seen = ws.frames
+        self._beat_at = -1e9
+        self._beat(last_rx)
         while not self._stop.is_set():
             message = ws.recv(t.tick)
             now = clock()
-            if ws.frames != seen:
-                seen, last_rx = ws.frames, now
             if isinstance(message, bytes):
+                last_rx = now
                 self._dispatch(link, decode(message))
+            elif message == "pong":
+                last_rx = now
+            if message is not None:
+                self._beat(now)
             if now - last_rx >= t.stale:
                 raise Stale
             if now - last_ping >= t.ping:
@@ -685,7 +705,8 @@ def _fatal(code: int) -> None:
 def run(base: Path, cfg: Mapping[str, Any], local_dev: bool) -> dict[str, object]:
     """Check the config, read the secrets once, then relay until SIGTERM or SIGINT."""
     settings = load_settings(cfg, local_dev)
-    connector = Connector(settings, display_tz(cfg))
+    beat = os.environ.get(HEARTBEAT_ENV)
+    connector = Connector(settings, display_tz(cfg), heartbeat=Path(beat) if beat else None)
     names = (signal.SIGTERM, signal.SIGINT)
     previous = {}
     if threading.current_thread() is threading.main_thread():
