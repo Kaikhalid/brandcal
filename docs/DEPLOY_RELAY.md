@@ -61,6 +61,24 @@ browser ──https──▶ Access (browser host) ──▶ Worker ──▶ Du
 - In Cloudflare, check that Rocket Loader, Email Obfuscation and other HTML-rewriting features are
   off for the browser host: they break brandcal's hash-based CSP.
 
+### Phone sign-in and the home-screen icon
+
+For an approver who opens brandcal every day from a phone, an email code on every visit is
+friction. Keep Access as the only gate and make it quick instead:
+
+- Add **Passkeys** as an Access login method (Zero Trust > Integrations > Identity providers,
+  type `passkeys`, automatic prompt on) and allow it on the browser-host app next to one-time PIN.
+  The approver enrols once (after one email code) and then signs in with Face ID or Touch ID.
+  The allow policy (approver emails) is unchanged; a passkey alone grants nothing.
+- Set the app session and the global session to one month (`730h`), so sign-in is needed about
+  once a month per device. Revoke sessions in Zero Trust if a phone is lost.
+- Do not add a bypass policy for the icons: the UI links the apple-touch-icon normally and the
+  manifest with `crossorigin="use-credentials"`, so both load with the Access cookie. Add the
+  icon to the home screen while signed in.
+- The manifest uses `display: standalone`. A home-screen web app on iOS keeps its own cookies,
+  so the approver signs in once inside it; the Access login page opens within the app and returns
+  to it. If sign-in ever loops, re-add the icon with "Open as Web App" turned off.
+
 ## 3. Secrets and where they live
 
 | Secret | Where | Read by |

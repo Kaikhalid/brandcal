@@ -546,7 +546,7 @@ def test_legacy_approved_imports_as_approved(
         path,
         "--legacy-approved",
         "--legacy-approved-words",
-        "legacy import: Kai approved; Kay relayed. KB record: example.",
+        "legacy import: Kai approved; manager relayed. KB record: example.",
     )
     assert code == 0
     assert {i["legacy_id"]: i["status"] for i in out["imported"]} == {
@@ -561,7 +561,7 @@ def test_legacy_approved_imports_as_approved(
     app = conn.execute("SELECT * FROM approvals WHERE post_id = ?", (post["id"],)).fetchone()
     assert app["channel"] == "legacy" and app["decision"] == "approve"
     assert app["approver_words"] == (
-        "legacy import: Kai approved; Kay relayed. KB record: example."
+        "legacy import: Kai approved; manager relayed. KB record: example."
     )
     assert app["decided_at"] == "2026-10-28T00:00:00+03:00"
     assert (app["decided_by"], app["relayed_by"], app["recorded_by"]) == (
