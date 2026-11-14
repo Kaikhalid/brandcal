@@ -1,10 +1,10 @@
-# brandcal Studio - Specification
+# Olympus - Specification
 
-**Version:** 1.0   **Date:** 2026-11-14   **Status:** Awaiting Approval (only the orchestrator changes this, and only after the user's go-ahead)
+**Version:** 1.0   **Date:** 2026-11-14   **Status:** Approved - Phases 1 to 9, and the unsigned local build in Phase 11 (2026-11-14). Phase 10 and signing are not approved.
 **Supersedes:** nothing
 **Blockers go to:** the final report
 
-"brandcal Studio" is a working name. The user chooses the final name (decision U1).
+The user named the product "Olympus" on 2026-11-14.
 
 ## 0. North Star
 
@@ -170,13 +170,13 @@ The user wants a self-contained macOS Electron app. In it, a team of marketing a
 
 This change only adds a new product in a new repository. It removes and weakens nothing in brandcal. brandcal's role checks, database triggers and hash chain stay the only path to the calendar.
 
-**Why not build on CopilotKit/OpenBot.** Its application code is MIT. It needs Docker Compose, PostgreSQL and Bun. It depends on a component named CopilotKit Intelligence under a separate licence. Its desktop app uses Tauri, not Electron. A self-contained Electron app cannot contain those parts. Studio borrows four ideas from it and no code: a roster of named bots, one workspace surface per bot, approval gates on writes, and a typed event stream from agent to interface.
+**Why not build on CopilotKit/OpenBot.** Its application code is MIT. It needs Docker Compose, PostgreSQL and Bun. It depends on a component named CopilotKit Intelligence under a separate licence. Its desktop app uses Tauri, not Electron. A self-contained Electron app cannot contain those parts. Olympus borrows four ideas from it and no code: a roster of named bots, one workspace surface per bot, approval gates on writes, and a typed event stream from agent to interface.
 
 **Why not the other "OpenBot" projects.** `nightly-labs/openbot` is excluded by the user: its licence forbids commercial use. `meetopenbot/openbot` is MIT but small, and documents no Gemini support.
 
 **Why a TypeScript agent library, not a platform.** The app needs a tool-calling loop, per-role model choice and streaming. A library gives those with no server. The two candidates are the Vercel AI SDK with its Google provider, and Google's ADK for TypeScript. Both are Apache-2.0. Phase 1 picks one by test (decision D1).
 
-**Why a new repository, not a branch.** brandcal is Python with a strict one-issue-one-change rule. Studio is TypeScript with its own release cycle and signing. A branch would mix two toolchains and two sets of contributor rules. Studio pins a released brandcal version instead.
+**Why a new repository, not a branch.** brandcal is Python with a strict one-issue-one-change rule. Olympus is TypeScript with its own release cycle and signing. A branch would mix two toolchains and two sets of contributor rules. Olympus pins a released brandcal version instead.
 
 **Why fewer roles first.** The user listed more than 8 functions. Each role adds cost per run and a failure point. Roles are data files (decision L9), so v1 ships 7 and more are added without code.
 
@@ -186,20 +186,20 @@ This change only adds a new product in a new repository. It removes and weakens 
 
 ### 2.3 Environment
 
-- **Studio repository:** new, created by the user (U1). This spec lives in the brandcal repository at `specs/brandcal-studio-spec.md` until the user moves it.
+- **Olympus repository:** new, created by the user (U1). This spec lives in the brandcal repository at `specs/olympus-spec.md` until the user moves it.
 - **brandcal repository:** `Kaikhalid/brandcal`. Licence MIT. Python 3.11 or later. Zero runtime dependencies.
 - **brandcal tests:** `python3 -m pytest` from the brandcal root.
-- **Studio runtime:** Node 22, Electron, React, TypeScript, Vite, Tailwind 4.
-- **Studio tests (to be created in Phase 2):** `npm test` runs unit tests. `npm run e2e` runs Playwright against the Electron app. On Linux, run e2e under `xvfb-run`.
+- **Olympus runtime:** Node 22, Electron, React, TypeScript, Vite, Tailwind 4.
+- **Olympus tests (to be created in Phase 2):** `npm test` runs unit tests. `npm run e2e` runs Playwright against the Electron app. On Linux, run e2e under `xvfb-run`.
 - **Terms:**
   - *Sidecar:* the brandcal executable bundled inside the app.
-  - *Studio home:* the directory given to brandcal as `BRANDCAL_HOME`. It sits inside the app's user-data directory.
+  - *Olympus home:* the directory given to brandcal as `BRANDCAL_HOME`. It sits inside the app's user-data directory.
   - *Role:* one agent definition (see L9).
   - *Model slot:* a named setting that maps to one Gemini model id. The slots are `reasoning`, `writing`, `fast`, `image`.
   - *Run:* one execution of one role for one task, with a budget and a result.
   - *Brief:* a goal typed by the human that starts one or more runs.
   - *Brand profile:* the organisation's voice, audiences, content pillars, platforms and competitors, entered by the human.
-  - *app.db:* Studio's own SQLite file for runs, ideas, research notes and settings. It is never `brand.db`.
+  - *app.db:* Olympus's own SQLite file for runs, ideas, research notes and settings. It is never `brand.db`.
 
 ### 2.4 Claims
 
@@ -226,10 +226,10 @@ This change only adds a new product in a new repository. It removes and weakens 
 
 ### 3.1 Locked decisions
 
-- **L1. Separate repository.** Studio's code lives in its own repository. It pins one released brandcal version. Reason: two toolchains and two rule sets. Rules out: Studio code inside the brandcal repository.
+- **L1. Separate repository.** Olympus's code lives in its own repository. It pins one released brandcal version. Reason: two toolchains and two rule sets. Rules out: Olympus code inside the brandcal repository.
 - **L2. Self-contained macOS app.** The installed app runs with no Python, Node, Docker, database server or account other than the Gemini key. v1 ships for Apple silicon. Rules out: any required background service.
-- **L3. No OpenBot code.** Studio copies no code from any project named OpenBot. `nightly-labs/openbot` must not be read, used or referenced as a dependency. Reason: licence and architecture (2.2).
-- **L4. brandcal is the only door to the calendar.** Every calendar read and write is a `brandcal` command run by the main process. Studio must not open `brand.db`, its media files or its archives directly. Reason: brandcal's triggers, hash chain and audit depend on it.
+- **L3. No OpenBot code.** Olympus copies no code from any project named OpenBot. `nightly-labs/openbot` must not be read, used or referenced as a dependency. Reason: licence and architecture (2.2).
+- **L4. brandcal is the only door to the calendar.** Every calendar read and write is a `brandcal` command run by the main process. Olympus must not open `brand.db`, its media files or its archives directly. Reason: brandcal's triggers, hash chain and audit depend on it.
 - **L5. Humans decide.** Approve, request changes, reschedule and cancel happen only after a human click in the app. No agent tool exposes these four actions. The record of each decision names the click event. Rules out: auto-approval, including a "trusted" mode.
 - **L6. One key, one provider, per-role models.** All model calls use one Gemini API key. Each role names a model slot. Settings maps each slot to a model id. A change applies to the next request with no restart.
 - **L7. No hard-coded model ids in role files or call sites.** Default ids live in one file, `models.defaults.json`. The app validates them against the API's model list at onboarding. Reason: K12.
@@ -244,23 +244,26 @@ This change only adds a new product in a new repository. It removes and weakens 
 - **L16. Agent tools enforce the brandcal role.** A role's tool list is filtered by its brandcal role. A writer role cannot call a manager command even if its file lists it.
 - **L17. Dependency licences.** Every shipped dependency is MIT, Apache-2.0, BSD or ISC. Rules out: AGPL, SSPL, BSL, "enterprise" directories and non-commercial licences.
 - **L18. Fake data only.** Fixtures, screenshots and examples use `Example Co` and `example.com`. Every time carries an explicit UTC offset. Reason: brandcal's data rules.
+- **L19. Approvals use the `card` channel.** Desk records each human decision on brandcal's existing `card` channel. The click event id is the `source_message_id`. Reason: the user chose it, and it needs no brandcal change.
+- **L20. One human, one Mac, one local calendar.** v1 has one Olympus home on one Mac and one human user with many agents. Rules out: remote mode, sharing and accounts in v1.
+- **L21. The interface follows brandcal's web UI.** Olympus reuses the structure, components, tokens and style rules of brandcal's `web/` directory and `docs/UI_STYLE.md`. Reason: the user chose it. Rules out: a new visual language.
+- **L22. The browser adapter is after v1.** Phase 10 is not built in v1. The `BrowserTool` interface is not created until then.
+- **L23. Distribution waits for proof of concept.** v1 ends with an unsigned build that runs on the user's Mac. Signing and notarisation are not built until the user supplies them.
 
 ### 3.2 Delegated to the operator
 
 - **D1. Agent library.** Choose the Vercel AI SDK (`ai` with `@ai-sdk/google`) or Google ADK for TypeScript. Criteria, in order: runs inside the Electron main process with no server; one role can call a text model and another an image model with one key; calls go direct to Google with no gateway; streaming and tool calls work; licence meets L17. If both pass, choose the AI SDK.
 - **D2. Build tooling.** Choose electron-vite or Electron Forge, and the packager. Criterion: produces a notarised `.dmg` containing the sidecar.
 - **D3. Sidecar packaging.** Choose PyInstaller or an embedded standalone Python. Criterion: the packaged app runs `brandcal help` on a Mac with no Python, and passes notarisation.
-- **D4. Interface components.** Use Tailwind 4 and `@base-ui/react`, matching brandcal's web UI (K8). `@ui-sdk/*` packages may be used only if Phase 1 shows they work in the Electron renderer. `sonner` may be used for notices.
+- **D4. Interface components.** Copy components from brandcal's `web/` where one fits (L21). For a missing component, build it with Tailwind 4 and `@base-ui/react` in the same style. `@ui-sdk/*` packages must not be used in v1. `sonner` may be used for notices.
 - **D5.** Test frameworks, the SQLite library for `app.db`, file layout, naming, wording of messages.
 
 ### 3.3 User-only decisions
 
-- **U1.** The product name, the repository name and owner, and creating the repository.
-- **U2.** How a desktop approval is recorded. Option A: use the existing `card` channel, with the click event id as `source_message_id`. Option B: add a `desktop` channel to brandcal, which is a schema change in brandcal. Phase 6 must not start until the user chooses.
+- **U1.** Creating the Olympus repository, its owner and its visibility.
 - **U3.** Apple Developer ID enrolment, and where signing credentials are kept.
-- **U4.** The ego browser skill text, and whether its adapter is in v1.
+- **U4.** The ego browser skill text, supplied after v1.
 - **U5.** The default monthly spend cap.
-- **U6.** Whether v1 calendars are local to one Mac, or shared through brandcal's remote mode.
 - **U7.** Any change to brandcal itself.
 
 ## 4. Target design
@@ -376,7 +379,7 @@ None expected.
 
 ### Phase 3 - Calendar bridge
 
-**Outcome:** On first launch the app creates a Studio home with `brandcal init`. The Calendar screen lists posts read through the sidecar.
+**Outcome:** On first launch the app creates a Olympus home with `brandcal init`. The Calendar screen lists posts read through the sidecar.
 **Contribution to the North Star:** Makes brandcal the app's calendar, under L4.
 **Depends on:** Phase 2.
 
@@ -387,9 +390,9 @@ None expected.
 - **Calendar screen.** Intent: week and month views from `list`, and post detail from `show`.
 
 #### 3.2 Acceptance checks
-- [ ] A post added with the sidecar from a terminal appears in the app after refresh - check: run `brandcal add` against the Studio home.
-- [ ] `brandcal audit` on the Studio home reports ok after first launch - check: run it.
-- [ ] No Studio source file opens `brand.db` - check: `grep -rn "brand.db" src/` finds only the path passed to brandcal.
+- [ ] A post added with the sidecar from a terminal appears in the app after refresh - check: run `brandcal add` against the Olympus home.
+- [ ] `brandcal audit` on the Olympus home reports ok after first launch - check: run it.
+- [ ] No Olympus source file opens `brand.db` - check: `grep -rn "brand.db" src/` finds only the path passed to brandcal.
 
 #### 3.3 Test contract
 | Outcome tested | Source of the expected value | Kind | Wrong implementation it catches |
@@ -400,7 +403,7 @@ None expected.
 | Times keep their offsets end to end | The offset in the input | preservation | Conversion to local time on the way |
 
 #### 3.4 Rollback
-Revert the phase's commits. Delete the test Studio home.
+Revert the phase's commits. Delete the test Olympus home.
 
 #### 3.5 Blocker risks
 B2 if a needed read exists only by opening `brand.db`. B5 if the fix needs a brandcal change (U7).
@@ -452,7 +455,7 @@ B4 if the key must be exposed outside the main process for any feature.
 - **Brief box.** Intent: one input on the Calendar screen that starts a run and shows progress in plain words.
 
 #### 5.2 Acceptance checks
-- [ ] A brief yields a post with status `pending_approval` - check: `brandcal show` on the Studio home.
+- [ ] A brief yields a post with status `pending_approval` - check: `brandcal show` on the Olympus home.
 - [ ] A role file that lists `approve` fails to load - check: unit test.
 - [ ] A run stops at its budget and reports why - check: stub model that never finishes.
 - [ ] A role added as a new file appears in the registry with no code change - check: add a fixture role.
@@ -476,7 +479,7 @@ B4 if a tool needs a brandcal role above the one in the role table.
 
 **Outcome:** The Inbox lists posts awaiting a decision. A human click approves, requests changes, reschedules or cancels. The decision is recorded by Desk through brandcal.
 **Contribution to the North Star:** Evidence item 3.
-**Depends on:** Phase 5 and U2.
+**Depends on:** Phase 5.
 
 #### 6.1 Work items
 - **`Desk`.** Intent: L5. Change: each decision needs a click event id created in the main process from a real input event.
@@ -500,7 +503,7 @@ B4 if a tool needs a brandcal role above the one in the role table.
 Revert the phase's commits.
 
 #### 6.5 Blocker risks
-B5 until U2 is chosen. B4 or B5 if U2 is option B, because that changes brandcal (U7).
+B5 if the `card` channel cannot carry the click event id without a brandcal change (U7).
 
 ### Phase 7 - Research and ideas
 
@@ -573,7 +576,7 @@ B1 if K11 is true and the user's key cannot generate images. This is reported, a
 - **Team screen.**
 - **Scheduler.** Intent: recurring runs while the app is open. Change: every routine starts with `brandcal sweep`, run as the system identity.
 - **Spend tracking and cap.** Intent: L12 and U5.
-- **Routines.** Intent: nightly `backup` and `export` of the Studio home.
+- **Routines.** Intent: nightly `backup` and `export` of the Olympus home.
 
 #### 9.2 Acceptance checks
 - [ ] A scheduled role runs at its time and records a run - check: e2e with a fake clock.
@@ -597,7 +600,7 @@ B5 until U5 is chosen. The operator may ship with the cap required at onboarding
 
 **Outcome:** `BrowserTool` has one working adapter. Competitor Monitor can read a page that grounding cannot reach.
 **Contribution to the North Star:** The user's stated wish for browser-driven agents, behind L15.
-**Depends on:** Phase 7 and U4.
+**Depends on:** Phase 7 and U4. Not approved for v1 (L22).
 
 #### 10.1 Work items
 - **`BrowserTool` interface.** Intent: `open`, `read`, `screenshot`, `close`. Read-only in v1.
@@ -627,7 +630,8 @@ B5 until U4 is done. B4 if the adapter needs logged-in sessions.
 **Depends on:** all earlier phases in scope, and U3.
 
 #### 11.1 Work items
-- **Signing and notarisation.** Intent: hardened runtime, the sidecar signed, the `.dmg` stapled. Must run on a Mac.
+- **Unsigned local build.** Intent: one command builds an unsigned app that runs on the user's Mac (L23).
+- **Signing and notarisation (not approved, L23).** Intent: hardened runtime, the sidecar signed, the `.dmg` stapled. Must run on a Mac.
 - **Clean-machine test.** Intent: a macOS user account with no developer tools.
 - **Late-majority pass.** Intent: every error has a plain message and one next step. No screen shows raw JSON by default.
 - **Documentation.** Intent: a README, a "get your key" guide with screenshots, and the licence notices file.
@@ -657,7 +661,7 @@ B5 until U3 is done. B3: publishing a release is not undoable, so the operator b
 1. Every calendar change is a `brandcal` command (L4).
 2. No path approves, requests changes, reschedules or cancels without a human click (L5).
 3. The key exists only in `safeStorage` and main-process memory (L8).
-4. `brandcal audit` passes on every Studio home the tests create.
+4. `brandcal audit` passes on every Olympus home the tests create.
 5. All tests pass with no network access, using stubs. Real-key checks are manual and labelled.
 6. No model id appears outside `models.defaults.json`, Settings and test fixtures (L7).
 
