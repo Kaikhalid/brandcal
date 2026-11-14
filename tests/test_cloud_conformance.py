@@ -49,7 +49,15 @@ CLOUD = ROOT / "cloud"
 ORIGIN = "https://brandcal.example.com"
 HOST = "brandcal.example.com"
 CLIENT_ID = "example-client-id.access"
-TIME_KEYS = {"at", "decided_at", "updated_at", "closed_at", "published_at", "claim_expires"}
+TIME_KEYS = {
+    "at",
+    "created_at",
+    "decided_at",
+    "updated_at",
+    "closed_at",
+    "published_at",
+    "claim_expires",
+}
 HASH_KEYS = {"row_hash", "prev_hash"}
 STAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}(?= )")
 SERVE_CFG: dict[str, Any] = {
