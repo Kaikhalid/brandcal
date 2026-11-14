@@ -739,6 +739,15 @@ COMMAND_FUNCS = {
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """The entry point; with BRANDCAL_REMOTE set, commands run against the Cloudflare calendar."""
+    from brandcal import remote
+
+    if remote.enabled():
+        return remote.main(list(argv if argv is not None else sys.argv[1:]), local_main)
+    return local_main(argv)
+
+
+def local_main(argv: Sequence[str] | None = None) -> int:
     try:
         args = build_parser().parse_args(argv)
         if args.command is None:

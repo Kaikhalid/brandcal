@@ -1,0 +1,19 @@
+{
+  "name": "brandcal-cloud",
+  "private": true,
+  "version": "0.0.0",
+  "description": "brandcal on Cloudflare: the web UI and JSON API on Workers with D1 (no runtime dependencies).",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261019.1",
+    "typescript": "5.9.3",
+    "wrangler": "4.151.2"
+  }
+}
