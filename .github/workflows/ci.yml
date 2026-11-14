@@ -155,3 +155,31 @@ jobs:
       - name: Tests
         run: npx vitest run
         working-directory: relay
+
+  cloud:
+    name: cloud (Worker + D1 conformance)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cloud/package-lock.json
+      - name: Install Worker tooling
+        run: npm ci
+        working-directory: cloud
+      - name: Typecheck
+        run: npx tsc --noEmit
+        working-directory: cloud
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,crypto]"
+      - name: Conformance (Python core vs Worker on a local D1)
+        env:
+          BRANDCAL_CLOUD_CONFORMANCE: "1"
+        run: pytest tests/test_cloud_conformance.py -q

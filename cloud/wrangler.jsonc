@@ -1,0 +1,23 @@
+{
+  // Example deployment config: the real one (account hostnames, database id) is kept outside the
+  // repository. See D1_MIGRATION.md 7 and 8.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "brandcal",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-22",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "brandcal.example.com", "custom_domain": true }],
+  "assets": {
+    "directory": "../src/brandcal/web_next",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "none",
+    "not_found_handling": "none"
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "brandcal", "database_id": "00000000-0000-0000-0000-000000000000" }
+  ],
+  "triggers": { "crons": ["30 0 * * *"] },
+  "observability": { "logs": { "enabled": true, "invocation_logs": false } }
+}
