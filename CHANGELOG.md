@@ -26,6 +26,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   must never be preferred over v2 columns.
 - Web UI screenshots (Example Co demo data) in `docs/img/`, plus GitHub issue and pull request
   templates.
+- Redesigned README with a hero image, light and dark screenshots, an approve-flow animation, a
+  social preview image and an architecture diagram, all rebuilt from fake data by
+  `scripts/readme_shots.py` and `scripts/readme_hero.py`.
 
 ### Changed
 - Rewrote `README.md` to lead with Cloudflare Workers + D1 self-hosting, remote AI assistant
