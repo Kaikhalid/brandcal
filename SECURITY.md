@@ -1,6 +1,16 @@
 # Security policy
 
-brandcal is in early development (v0.x) and has no supported release yet.
+## Supported versions
+
+The current minor release series receives security fixes:
+
+| Version | Supported |
+|---|---|
+| 0.2.x | Yes |
+| < 0.2.0 | No |
+
+brandcal is still an alpha release (v0.x), so interfaces may evolve before v1.0,
+but security issues in the current 0.2.x series are fixed promptly.
 
 ## Reporting a vulnerability
 

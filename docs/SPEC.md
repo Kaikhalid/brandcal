@@ -191,7 +191,7 @@ CREATE TABLE posts (
   cancel_kind   TEXT CHECK (cancel_kind IN ('idea','version','plan')),
   notes         TEXT,
   legacy_id     TEXT UNIQUE,
-  extras        TEXT,                             -- JSON; v1 originals and unknown fields (SPEC 12)
+  extras        TEXT,                             -- frozen one-time v1 import snapshot; never prefer over v2 columns (SPEC 12)
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL, closed_at TEXT,
   CHECK (window GLOB '????-??-??T??:??:??[+-]??:??/????-??-??T??:??:??[+-]??:??'),
   CHECK (window_end_utc > window_start_utc),
@@ -743,6 +743,11 @@ otherwise it stays `pending_approval` and needs a fresh approval. Rerunning skip
 field is kept, either in a first-class column or in `posts.extras`. Unknown fields go into
 `extras.unknown` and are listed in the report; a value that cannot be stored as JSON fails
 the migration (exit 2, `BAD_ARGS`). Nothing is dropped silently.
+
+`posts.extras` is a **frozen, one-time snapshot** from the v1 import and is never updated
+afterwards. Readers and integrations must always use the v2 columns (`posts.window`,
+`posts.status`, `parts.text`, `posts.platform_url`, `posts.published_at`) and must never
+prefer values in `posts.extras`.
 
 **v1 format** (see `examples/v1_calendar.example.json` and the synthetic fixture in
 `tests/fixtures/v1_team_shaped.json`): a JSON array of items, or a JSON object with an

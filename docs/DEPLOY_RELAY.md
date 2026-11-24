@@ -1,5 +1,9 @@
 # Deploying the web UI through the Cloudflare Worker relay
 
+> **Historical reference.** The Cloudflare Worker + D1 setup in
+> [docs/CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) replaces this relay setup. This guide is kept
+> for reference only.
+
 This is the generic recipe for running `brandcal serve` behind a Cloudflare Worker relay instead
 of a Cloudflare Tunnel. Every host, email and id below is a placeholder: `brandcal.example.com`
 is the browser host, `brandcal-relay.example.com` the connector host,

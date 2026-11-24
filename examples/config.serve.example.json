@@ -1,0 +1,35 @@
+{
+  "timezone": "Europe/London",
+  "agents": [
+    {"id": "writer-1", "role": "writer"},
+    {"id": "manager-1", "role": "manager"},
+    {"id": "approver-1", "role": "approver"},
+    {"id": "admin-1", "role": "admin"},
+    {"id": "system", "role": "system"},
+    {"id": "console", "role": "system"}
+  ],
+  "platforms_file": "platforms.json",
+  "claim_minutes": 30,
+  "missed_flag_days": 14,
+  "backup_keep": {"db": 14, "json": 30},
+  "serve": {
+    "port": 8787,
+    "allowed_origins": ["https://brandcal.example.com"],
+    "identity": {
+      "team_domain": "your-team.cloudflareaccess.com",
+      "audience": "00000000-0000-0000-0000-000000000000",
+      "jwks_cache_minutes": 60
+    },
+    "approvers": {
+      "you@example.com": "approver-1"
+    },
+    "viewers": [
+      "viewer@example.com"
+    ],
+    "console_agent": "console",
+    "console_approvals": false,
+    "service_tokens": [
+      "00000000-0000-0000-0000-000000000000.access"
+    ]
+  }
+}

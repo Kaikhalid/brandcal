@@ -1,15 +1,17 @@
 # brandcal on Cloudflare: Workers + D1
 
-Status: built and conformance-tested; staging first, production switchover by runbook. Hosts and
-ids below are placeholders (`brandcal.example.com`, `example.cloudflareaccess.com`). Real values
-live only in the private deployment config and the operator's runbook, never in this repository.
+Status: live and conformance-tested. For a step-by-step installation guide on a fresh Cloudflare
+account, see [docs/CLOUDFLARE_SETUP.md](docs/CLOUDFLARE_SETUP.md). Hosts and ids below are
+placeholders (`brandcal.example.com`, `your-team.cloudflareaccess.com`). Real values live only in
+the private deployment config and the operator's runbook, never in this repository.
 
 ## 1. Why
 
 Until now `brandcal serve` ran on one machine and a Worker relayed browser requests to it
-([DEPLOY_RELAY.md](docs/DEPLOY_RELAY.md)). If that machine sleeps, restarts or loses its link, the
-web UI is down, and the calendar's only copy lives on its disk. The goal: nothing depends on a
-single machine, it stays within Cloudflare's free tier, and the Python core stays the reference.
+([DEPLOY_RELAY.md](docs/DEPLOY_RELAY.md), now kept for reference only). If that machine sleeps,
+restarts or loses its link, the web UI is down, and the calendar's only copy lives on its disk.
+The goal: nothing depends on a single machine, it stays within Cloudflare's free tier, and the
+Python core stays the reference.
 
 ## 2. Architecture
 
@@ -50,6 +52,14 @@ content hashes and event hashes carry over and `brandcal audit` still verifies t
 Every write is optimistic: a batch (one D1 transaction) starts with
 `UPDATE meta SET v = seen + 1 WHERE k = 'gen'`, and a trigger aborts the batch if another write
 moved the generation first. The writer reloads and tries again (three times).
+
+### `posts.extras` is a frozen v1 import snapshot
+
+The `posts.extras` column is written once during a v1 calendar import (`brandcal migrate`) and is
+never updated afterwards. It exists only for forensic reference to original v1 fields. Readers and
+integrations must always read the authoritative v2 columns (`posts.window`, `posts.status`,
+`parts.text`, `posts.platform_url`, `posts.published_at`) and must never prefer values from
+`posts.extras`, which go stale as soon as a post is edited, rescheduled or published.
 
 ## 4. Identity and approval semantics
 

@@ -13,7 +13,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "brandcal contributors" }]
 keywords = ["content-calendar", "ai-agents", "sqlite", "cli", "social-media", "approval"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
@@ -49,6 +49,14 @@ artifacts = [
     "src/brandcal/web/*.js",
     "src/brandcal/web/*.svg",
     "src/brandcal/web_next/**",
+]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "**/node_modules",
+    "**/.wrangler",
+    "**/.dev.vars",
+    "**/wrangler.*.jsonc",
 ]
 
 [tool.ruff]
