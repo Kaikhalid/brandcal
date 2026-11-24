@@ -1,5 +1,9 @@
 # `brandcal relay`: the connector for the Worker relay
 
+> **Historical reference.** The Cloudflare Worker + D1 setup in
+> [docs/CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) replaces the relay and connector. This document
+> is kept for reference only.
+
 `brandcal relay` dials out to the Cloudflare Worker relay over one WebSocket on port 443 and
 replays each browser request against `brandcal serve` on `127.0.0.1`. It is for hosts that
 cannot reach a Cloudflare Tunnel edge. Every host, path and id below is a placeholder:

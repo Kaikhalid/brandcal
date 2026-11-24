@@ -1,5 +1,9 @@
 # Deploying the web UI behind Cloudflare Tunnel and Access
 
+> **Historical reference.** The Cloudflare Worker + D1 setup in
+> [docs/CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) replaces this single-machine tunnel setup. This
+> guide is kept for reference only.
+
 This is the generic recipe from UI_SPEC 2.8. Every host, email and id below is a placeholder:
 `brandcal.example.com` is your UI hostname, `example.cloudflareaccess.com` your Zero Trust team
 domain, `approver@example.com` the approver, `TUNNEL_ID` and `AUD_TAG` the values Cloudflare
@@ -10,8 +14,7 @@ only way in is the tunnel, and Access sits in front of the tunnel. brandcal stil
 Access JWT itself on every request (UI_SPEC 2.3), so a request that somehow bypasses Access is
 refused with `IDENTITY_UNVERIFIED`.
 
-If the host cannot reach the tunnel edge (`cloudflared` needs outbound port 7844), use the
-Cloudflare Worker relay instead: [DEPLOY_RELAY.md](DEPLOY_RELAY.md).
+For the older Worker relay alternative (also historical), see [DEPLOY_RELAY.md](DEPLOY_RELAY.md).
 
 ## 1. Before you start
 

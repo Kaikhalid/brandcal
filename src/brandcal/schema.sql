@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS posts (
   cancel_kind   TEXT CHECK (cancel_kind IN ('idea','version','plan')),
   notes         TEXT,
   legacy_id     TEXT UNIQUE,
+  -- Frozen one-time snapshot from v1 import (SPEC 12); never updated. Read v2 columns instead.
   extras        TEXT CHECK (extras IS NULL OR json_valid(extras)),
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL, closed_at TEXT,
   CHECK (window GLOB '????-??-??T??:??:??[+-]??:??/????-??-??T??:??:??[+-]??:??'),
