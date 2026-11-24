@@ -1,5 +1,9 @@
 # brandcal relay (Cloudflare Worker)
 
+> **Historical reference.** The Cloudflare Worker + D1 setup in
+> [docs/CLOUDFLARE_SETUP.md](../docs/CLOUDFLARE_SETUP.md) replaces this relay. It is kept in the
+> repository for reference only.
+
 The Worker and Durable Object for the U4 relay. The box cannot reach a Cloudflare tunnel edge, so
 `brandcal relay` (the connector, `src/brandcal/relay.py`) dials out over port 443 and keeps one
 WebSocket open to the Durable Object. The Worker takes each browser request, sends it down that

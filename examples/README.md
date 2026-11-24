@@ -4,6 +4,8 @@ All data here is obviously fake (**Example Co**, `example.com`).
 
 - `config.json` and `platforms.json`: a minimal data-directory configuration (SPEC 13),
   used by the README quick start.
+- `config.serve.example.json`: a configuration including the `serve` block for Cloudflare
+  Access, browser approvers, viewers and service tokens (see `docs/CLOUDFLARE_SETUP.md`).
 - `posts/example-launch.json`: one post to pipe into `brandcal add`.
 - `v1_calendar.example.json`: a calendar in the generic v1 JSON format that
   `brandcal migrate` imports (SPEC 12), as a JSON object with an `items` list. It covers

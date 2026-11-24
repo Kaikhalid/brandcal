@@ -1,6 +1,6 @@
 {
-  // Example deployment config: the real one (account hostnames, database id) is kept outside the
-  // repository. See D1_MIGRATION.md 7 and 8.
+  // Example deployment config: copy to wrangler.local.jsonc (git-ignored) and put your own
+  // hostname, database id and KV namespace id there. See docs/CLOUDFLARE_SETUP.md.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "brandcal",
   "main": "src/index.ts",
@@ -17,6 +17,9 @@
   },
   "d1_databases": [
     { "binding": "DB", "database_name": "brandcal", "database_id": "00000000-0000-0000-0000-000000000000" }
+  ],
+  "kv_namespaces": [
+    { "binding": "BACKUPS", "id": "00000000-0000-0000-0000-000000000000" }
   ],
   "triggers": { "crons": ["30 0 * * *"] },
   "observability": { "logs": { "enabled": true, "invocation_logs": false } }
